@@ -452,7 +452,7 @@ emacs_module_init(struct emacs_runtime *ert)
 
 	/* define the functions */
 	defun(env, "toxe-start", 0, 0, toxe_start, TOXE_START, 0);
-	defun(env, "toxe-quit", 0, 0, toxe_stop, TOXE_STOP, 0);
+	defun(env, "toxe-stop", 0, 0, toxe_stop, TOXE_STOP, 0);
 	defun(env, "toxe-iteration-interval", 0, 0, toxe_iteration_interval,
 	    TOXE_ITERATION_INTERVAL, 0);
 	defun(env, "toxe-iterate", 0, 0, toxe_iterate, TOXE_ITERATE, 0);
