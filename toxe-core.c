@@ -234,7 +234,7 @@ toxe_start(emacs_env *env, ptrdiff_t n, emacs_value *args, void *ptr)
 static emacs_value
 toxe_stop(emacs_env *env, ptrdiff_t n, emacs_value *args, void *ptr)
 {
-	UNUSED(env); UNUSED(n); UNUSED(args); UNUSED(ptr);
+	UNUSED(n); UNUSED(args); UNUSED(ptr);
 
 	if (tox != NULL) {
 		tox_kill(tox);
