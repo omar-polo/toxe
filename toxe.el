@@ -9,14 +9,15 @@
 (require 'cl-lib)
 
 ;; don't require dynamic module at byte compile time.
-(declare-function toxe-start                "toxe-core" ())
-(declare-function toxe-stop                 "toxe-core" ())
-(declare-function toxe-iteration-interval   "toxe-core" ())
-(declare-function toxe-iterate              "toxe-core" ())
-(declare-function toxe-self-get-address     "toxe-core" ())
-(declare-function toxe-friend-add           "toxe-core" (pk msg))
-(declare-function toxe-friend-add-norequest "toxe-core" (pk))
-(declare-function toxe-friend-send-message  "toxe-core" (friend-number type msg))
+(declare-function toxe-start                   "toxe-core" ())
+(declare-function toxe-stop                    "toxe-core" ())
+(declare-function toxe-self-set-name           "toxe-core" (name))
+(declare-function toxe-iteration-interval      "toxe-core" ())
+(declare-function toxe-iterate                 "toxe-core" ())
+(declare-function toxe-self-get-address        "toxe-core" ())
+(declare-function toxe-friend-add              "toxe-core" (pk msg))
+(declare-function toxe-friend-add-norequest    "toxe-core" (pk))
+(declare-function toxe-friend-send-message     "toxe-core" (friend-number type msg))
 
 (cl-eval-when (load eval)
   (require 'toxe-core))

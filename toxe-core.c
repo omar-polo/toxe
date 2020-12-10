@@ -243,6 +243,35 @@ toxe_stop(emacs_env *env, ptrdiff_t n, emacs_value *args, void *ptr)
 	return NIL(env);
 }
 
+#define TOXE_SELF_SET_NAME			\
+	"(toxe-self-set-name NAME)"		\
+	"\n"					\
+	"Set your name to NAME."
+static emacs_value
+toxe_self_set_name(emacs_env *env, ptrdiff_t n, emacs_value *args, void *ptr)
+{
+	char *name;
+	size_t len;
+
+	UNUSED(n); UNUSED(ptr);
+	GUARD_EMACS_FN(env);
+
+	env->copy_string_contents(env, args[0], NULL, &len);
+	if (RAISED_ERROR(env))
+		return NIL(env);
+	if ((name = calloc(1, len)) == NULL)
+		return NIL(env);
+	if (!env->copy_string_contents(env, args[0], name, &len)) {
+		free(name);
+		return NIL(env);
+	}
+
+	tox_self_set_name(tox, (const uint8_t*)name, len, NULL);
+	free(name);
+
+	return args[0];
+}
+
 #define TOXE_ITERATION_INTERVAL					\
 	"(toxe-iteration-interval)"				\
 	"\n"							\
@@ -453,6 +482,8 @@ emacs_module_init(struct emacs_runtime *ert)
 	/* define the functions */
 	defun(env, "toxe-start", 0, 0, toxe_start, TOXE_START, 0);
 	defun(env, "toxe-stop", 0, 0, toxe_stop, TOXE_STOP, 0);
+	defun(env, "toxe-self-set-name", 1, 1, toxe_self_set_name,
+	    TOXE_SELF_SET_NAME, 0);
 	defun(env, "toxe-iteration-interval", 0, 0, toxe_iteration_interval,
 	    TOXE_ITERATION_INTERVAL, 0);
 	defun(env, "toxe-iterate", 0, 0, toxe_iterate, TOXE_ITERATE, 0);
