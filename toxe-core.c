@@ -272,6 +272,36 @@ toxe_self_set_name(emacs_env *env, ptrdiff_t n, emacs_value *args, void *ptr)
 	return args[0];
 }
 
+#define TOXE_SELF_SET_STATUS_MESSAGE		\
+	"(toxe-self-set-status-message msg)"	\
+	"\n"					\
+	"Set your name status message to msg."
+static emacs_value
+toxe_self_set_status_message(emacs_env *env, ptrdiff_t n, emacs_value *args,
+    void *ptr)
+{
+	char *msg;
+	size_t len;
+
+	UNUSED(n); UNUSED(ptr);
+	GUARD_EMACS_FN(env);
+
+	env->copy_string_contents(env, args[0], NULL, &len);
+	if (RAISED_ERROR(env))
+		return NIL(env);
+	if ((msg = calloc(1, len)) == NULL)
+		return NIL(env);
+	if (!env->copy_string_contents(env, args[0], msg, &len)) {
+		free(msg);
+		return NIL(env);
+	}
+
+	tox_self_set_status_message(tox, (const uint8_t*)msg, len, NULL);
+	free(msg);
+
+	return args[0];
+}
+
 #define TOXE_ITERATION_INTERVAL					\
 	"(toxe-iteration-interval)"				\
 	"\n"							\
@@ -484,6 +514,8 @@ emacs_module_init(struct emacs_runtime *ert)
 	defun(env, "toxe-stop", 0, 0, toxe_stop, TOXE_STOP, 0);
 	defun(env, "toxe-self-set-name", 1, 1, toxe_self_set_name,
 	    TOXE_SELF_SET_NAME, 0);
+	defun(env, "toxe-self-set-status-message", 1, 1,
+	    toxe_self_set_status_message, TOXE_SELF_SET_STATUS_MESSAGE, 0);
 	defun(env, "toxe-iteration-interval", 0, 0, toxe_iteration_interval,
 	    TOXE_ITERATION_INTERVAL, 0);
 	defun(env, "toxe-iterate", 0, 0, toxe_iterate, TOXE_ITERATE, 0);

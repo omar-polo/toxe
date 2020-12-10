@@ -12,6 +12,7 @@
 (declare-function toxe-start                   "toxe-core" ())
 (declare-function toxe-stop                    "toxe-core" ())
 (declare-function toxe-self-set-name           "toxe-core" (name))
+(declare-function toxe-self-set-status-message "toxe-core" (msg))
 (declare-function toxe-iteration-interval      "toxe-core" ())
 (declare-function toxe-iterate                 "toxe-core" ())
 (declare-function toxe-self-get-address        "toxe-core" ())
