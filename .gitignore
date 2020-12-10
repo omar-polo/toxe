@@ -1,1 +1,4 @@
 TAGS
+*.o
+*.so
+*.elc
