@@ -4,11 +4,14 @@
 #include <string.h>
 #include <strings.h>
 #include <tox/tox.h>
+#include <unistd.h>
 
 /* go figure... */
 int	plugin_is_GPL_compatible;
 
 #define UNUSED(d) ((void)(d))
+
+#define INTERN(env, s)	((env)->intern((env), (s)))
 
 #define T(env)		((env)->intern((env), "t"))
 #define NIL(env)	((env)->intern((env), "nil"))
@@ -20,7 +23,7 @@ int	plugin_is_GPL_compatible;
 		return NIL(env);			\
 
 #define RAISED_ERROR(env)						\
-	((env)->non_local_exit_check(env) == emacs_funcall_exit_return)
+	((env)->non_local_exit_check(env) != emacs_funcall_exit_return)
 
 static Tox *tox = NULL;
 
@@ -28,6 +31,57 @@ int		toxe_is_valid_utf8(const char*, size_t);
 
 
 typedef emacs_value (*emacs_fn_t)(emacs_env*, ptrdiff_t, emacs_value*, void*);
+
+
+/* helpers */
+
+/* return NULL on allocation failure of if the file doesn't exists,
+ * otherwise return the content of the file.  If failed, check for a
+ * non-local exit. */
+static char *
+toxe_slurp_file(emacs_env *env, const char *path, size_t *ret_len)
+{
+	char *data;
+	size_t fsize;
+	FILE *f;
+
+	if ((f = fopen(path, "r")) == NULL)
+		return NULL;
+
+	fseek(f, 0, SEEK_END);
+	fsize = ftell(f);
+	fseek(f, 0, SEEK_SET);
+
+	if ((data = malloc(fsize)) == NULL) {
+		fclose(f);
+
+		/* TODO: better signal? */
+		env->non_local_exit_signal(env, env->intern(env, "overflow-error"),
+		    NIL(env));
+		return NULL;
+	}
+
+	fread(data, fsize, 1, f);
+	fclose(f);
+
+	*ret_len = fsize;
+	return data;
+}
+
+/* print the given string though emacs message function.  one-effort
+ * function. */
+static void
+debug_message(emacs_env *env, char *s)
+{
+	emacs_value message, str;
+
+	if (s == NULL)
+		return;
+
+	message = env->intern(env, "message");
+	str = env->make_string(env, s, strlen(s));
+	env->funcall(env, message, 1, &str);
+}
 
 
 /* helpers from c <-> elisp */
@@ -87,6 +141,84 @@ toxe_make_string(emacs_env *env, const char *str, size_t len,
 
 	free(dup);
 	return env->non_local_exit_check(env) == emacs_funcall_exit_return;
+}
+
+/* convert M to a string.  If return false, a signal was raised,
+ * don't use RET_S or RET_LEN in those cases.  Furthermore, RET_LEN
+ * can be NULL, but RET_S can't. */
+static int
+toxe_extract_string(emacs_env *env, emacs_value m, char **ret_s, size_t *ret_len)
+{
+	size_t len;
+
+	if (ret_len != NULL)
+		*ret_len = 0;
+
+	env->copy_string_contents(env, m, NULL, &len);
+	if (RAISED_ERROR(env))
+		return 0;
+
+	if ((*ret_s = calloc(1, len)) == NULL) {
+		/* TODO: better error? */
+		env->non_local_exit_signal(env, env->intern(env, "overflow-error"),
+		    NIL(env));
+		return 0;
+	}
+	if (!env->copy_string_contents(env, m, *ret_s, &len)) {
+		free(ret_s);
+		*ret_s = NULL;
+		return 0;
+	}
+
+	if (ret_len != NULL)
+		*ret_len = len;
+	return 1;
+}
+
+static emacs_value
+toxe_err_new_to_symbol(emacs_env *env, TOX_ERR_NEW t)
+{
+	switch (t) {
+	case TOX_ERR_NEW_OK:
+		return T(env);
+	case TOX_ERR_NEW_NULL:
+		return INTERN(env, "toxe-err-new-null");
+	case TOX_ERR_NEW_MALLOC:
+		return INTERN(env, "toxe-err-new-malloc");
+	case TOX_ERR_NEW_PORT_ALLOC:
+		return INTERN(env, "toxe-err-new-port-alloc");
+	case TOX_ERR_NEW_PROXY_BAD_TYPE:
+		return INTERN(env, "toxe-err-new-proxy-bad-type");
+	case TOX_ERR_NEW_PROXY_BAD_HOST:
+		return INTERN(env, "toxe-err-new-proxy-bad-host");
+	case TOX_ERR_NEW_PROXY_BAD_PORT:
+		return INTERN(env, "toxe-err-new-proxy-bad-port");
+	case TOX_ERR_NEW_PROXY_NOT_FOUND:
+		return INTERN(env, "toxe-err-new-proxy-not-found");
+	case TOX_ERR_NEW_LOAD_ENCRYPTED:
+		return INTERN(env, "toxe-err-new-load-encrypted");
+	case TOX_ERR_NEW_LOAD_BAD_FORMAT:
+		return INTERN(env, "toxe-err-new-load-bad-format");
+	default:
+		return INTERN(env, "toxe-err-new-unknown");
+	}
+}
+
+static emacs_value
+toxe_bootstrap_err_to_symbol(emacs_env *env, TOX_ERR_BOOTSTRAP t)
+{
+	switch (t) {
+	case TOX_ERR_BOOTSTRAP_OK:
+		return T(env);
+	case TOX_ERR_BOOTSTRAP_NULL:
+		return INTERN(env, "toxe-err-bootstrap-null");
+	case TOX_ERR_BOOTSTRAP_BAD_HOST:
+		return INTERN(env, "toxe-err-bootstrap-bad-host");
+	case TOX_ERR_BOOTSTRAP_BAD_PORT:
+		return INTERN(env, "toxe-err-bootstrap-bad-port");
+	default:
+		return INTERN(env, "toxe-err-bootstrap-unknown");
+	}
 }
 
 static int
@@ -173,6 +305,8 @@ toxe_handle_friend_request(Tox *tox, const uint8_t *public_key, const uint8_t *m
 	args[1] = pk;
 	args[2] = msg;
 	env->funcall(env, run_hook_with_args, 3, args);
+
+	debug_message(env, "toxe-core: called toxe-friend-request-hook");
 }
 
 /* call the hook toxe-friend-message-hook */
@@ -199,40 +333,214 @@ toxe_handle_friend_message(Tox *tox, uint32_t friend_number, TOX_MESSAGE_TYPE ty
 	args[2] = msg_type;
 	args[3] = msg;
 	env->funcall(env, run_hook_with_args, 4, args);
+
+	debug_message(env, "toxe-core: called toxe-friend-message-hook");
+}
+
+/* call the hook toxe-self-connection-status-hook */
+static void
+toxe_handle_self_connection_status(Tox *tox, TOX_CONNECTION status, void *udata)
+{
+	emacs_value run_hook_with_args, args[2];
+	emacs_env *env = udata;
+
+	UNUSED(tox);
+
+	args[0] = env->intern(env, "toxe-self-connection-status-hook");
+	if (RAISED_ERROR(env))
+		return;
+
+	switch (status) {
+	case TOX_CONNECTION_NONE:
+		args[1] = env->intern(env, "toxe-connection-none");
+		break;
+	case TOX_CONNECTION_TCP:
+		args[1] = env->intern(env, "toxe-connection-tcp");
+		break;
+	case TOX_CONNECTION_UDP:
+		args[1] = env->intern(env, "toxe-connection-udp");
+		break;
+	default:
+		args[1] = env->intern(env, "toxe-connection-unknown");
+		break;
+	}
+
+	if (RAISED_ERROR(env))
+		return;
+
+	run_hook_with_args = env->intern(env, "run-hook-with-args");
+	env->funcall(env, run_hook_with_args, 2, args);
+
+	debug_message(env, "toxe-core: called toxe-self-connection-status-hook");
 }
 
 
 /* binding to elisp */
 
-#define TOXE_START				\
-	"(toxe-start)\n"			\
+#define TOXE__START				\
+	"(toxe--start PATH)\n"			\
 	"\n"					\
-	"Starts the client."
+	"Starts the client storing data in PATH."
 static emacs_value
-toxe_start(emacs_env *env, ptrdiff_t n, emacs_value *args, void *ptr)
+toxe__start(emacs_env *env, ptrdiff_t n, emacs_value *args, void *ptr)
 {
 	TOX_ERR_NEW err_new;
+	struct Tox_Options opts;
+	char *path;
+	uint8_t *data;
+	size_t len;
 
-	UNUSED(n); UNUSED(args); UNUSED(ptr);
+	UNUSED(n); UNUSED(ptr);
 
-	tox = tox_new(NULL, &err_new);
+	if (tox != NULL) {
+		env->non_local_exit_signal(env, INTERN(env, "error"), NIL(env));
+		return NIL(env);
+	}
+
+	tox_options_default(&opts);
+
+	tox = NULL;
+	if (env->is_not_nil(env, args[0])) {
+		if (!toxe_extract_string(env, args[0], &path, NULL)) {
+			debug_message(env, "toxe: failed to extract the string");
+			return NIL(env);
+		}
+
+		if ((data = toxe_slurp_file(env, path, &len)) == NULL) {
+			free(path);
+
+			if (RAISED_ERROR(env)) {
+				return NIL(env);
+			}
+			debug_message(env, "toxe: the file doesn't exists");
+		} else {
+			opts.savedata_type = TOX_SAVEDATA_TYPE_TOX_SAVE;
+			opts.savedata_data = data;
+			opts.savedata_length = len;
+
+			debug_message(env, "toxe: calling tox with options");
+			tox = tox_new(&opts, &err_new);
+
+			free(data);
+			free(path);
+		}
+	}
+
+	if (tox == NULL)
+		tox = tox_new(NULL, &err_new);
+
 	if (err_new != TOX_ERR_NEW_OK) {
-		tox = NULL;	 /* just in case */
-		return NIL(env); /* TODO: singal an error */
+		tox = NULL;
+		env->non_local_exit_signal(env, INTERN(env, "toxe-new-error"),
+		    toxe_err_new_to_symbol(env, err_new));
+		return NIL(env);
 	}
 
 	tox_callback_friend_request(tox, toxe_handle_friend_request);
 	tox_callback_friend_message(tox, toxe_handle_friend_message);
+	tox_callback_self_connection_status(tox, toxe_handle_self_connection_status);
 
 	return T(env);
 }
 
-#define TOXE_STOP				\
-	"(toxe-stop)\n"				\
+#define TOXE__BOOTSTRAP							\
+	"(toxe-bootstrap HOST PORT PUBLIC-KEY)"				\
+	"\n"								\
+	"Send a ``get-nodes'' request to the given bootstrap node "	\
+	"with HOST, PORT and PUBLIC-KEY."
+static emacs_value
+toxe__bootstrap(emacs_env *env, ptrdiff_t n, emacs_value *args, void *ptr)
+{
+	char *host, *pk;
+	uint16_t port;
+	TOX_ERR_BOOTSTRAP err;
+
+	UNUSED(n); UNUSED(ptr);
+	GUARD_EMACS_FN(env);
+
+	if (!toxe_extract_string(env, args[0], &host, NULL))
+		return NIL(env);
+
+	port = env->extract_integer(env, args[1]);
+	if (RAISED_ERROR(env)) {
+		free(host);
+		return NIL(env);
+	}
+
+	if (!toxe_extract_string(env, args[2], &pk, NULL)) {
+		free(host);
+		return NIL(env);
+	}
+
+	tox_bootstrap(tox, host, port, pk, &err);
+	free(host);
+	free(pk);
+
+	if (err != TOX_ERR_BOOTSTRAP_OK)
+		return toxe_bootstrap_err_to_symbol(env, err);
+	return T(env);
+}
+
+#define TOXE__SAVE							\
+	"(toxe-save PATH TMP)"						\
+	"\n"								\
+	"Save the status to PATH, using TMP as temporary storage."
+static emacs_value
+toxe__save(emacs_env *env, ptrdiff_t n, emacs_value *args, void *ptr)
+{
+	char *path, *tmp;
+	uint8_t *data;
+	FILE *f;
+	size_t len, r;
+
+	UNUSED(n); UNUSED(ptr);
+	GUARD_EMACS_FN(env);
+
+	if (!toxe_extract_string(env, args[0], &path, NULL))
+		return NIL(env);
+	if (!toxe_extract_string(env, args[1], &tmp, NULL)) {
+		free(path);
+		return NIL(env);
+	}
+
+	len = tox_get_savedata_size(tox);
+	if ((data = malloc(len)) == NULL) {
+		free(path);
+		free(tmp);
+		/* TODO: raise */
+		return NIL(env);
+	}
+	tox_get_savedata(tox, data);
+
+	if ((f = fopen(tmp, "w")) == NULL) {
+		free(data);
+		free(path);
+		free(tmp);
+		/* TODO: raise */
+		return NIL(env);
+	}
+	r = fwrite(data, 1, len, f);
+	fclose(f);
+
+	if (r == len)
+		rename(tmp, path);
+	unlink(tmp);
+
+	free(data);
+	free(tmp);
+	free(path);
+
+	if (r == len)
+		return T(env);
+	return NIL(env);
+}
+
+#define TOXE__STOP				\
+	"(toxe--stop)\n"			\
 	"\n"					\
 	"Shuts down toxe."
 static emacs_value
-toxe_stop(emacs_env *env, ptrdiff_t n, emacs_value *args, void *ptr)
+toxe__stop(emacs_env *env, ptrdiff_t n, emacs_value *args, void *ptr)
 {
 	UNUSED(n); UNUSED(args); UNUSED(ptr);
 
@@ -240,6 +548,7 @@ toxe_stop(emacs_env *env, ptrdiff_t n, emacs_value *args, void *ptr)
 		tox_kill(tox);
 		tox = NULL;
 	}
+
 	return NIL(env);
 }
 
@@ -305,20 +614,15 @@ toxe_self_set_status_message(emacs_env *env, ptrdiff_t n, emacs_value *args,
 #define TOXE_ITERATION_INTERVAL					\
 	"(toxe-iteration-interval)"				\
 	"\n"							\
-	"The number of seconds as floating point to wait "	\
-	"between calls to `toxe-iterate'."
+	"The number of milliseconds to wait between calls to "	\
+	"`toxe-iterate'."
 static emacs_value
 toxe_iteration_interval(emacs_env *env, ptrdiff_t n, emacs_value *args, void *ptr)
 {
-	int mils;
-	double seconds;
-
 	UNUSED(n); UNUSED(args); UNUSED(ptr);
 	GUARD_EMACS_FN(env);
 
-	mils = tox_iteration_interval(tox);
-	seconds = mils * 1000.0;
-	return env->make_float(env, seconds);
+	return env->make_integer(env, tox_iteration_interval(tox));
 }
 
 #define TOXE_ITERATE					\
@@ -510,8 +814,10 @@ emacs_module_init(struct emacs_runtime *ert)
 		return 1;
 
 	/* define the functions */
-	defun(env, "toxe-start", 0, 0, toxe_start, TOXE_START, 0);
-	defun(env, "toxe-stop", 0, 0, toxe_stop, TOXE_STOP, 0);
+	defun(env, "toxe--start", 1, 1, toxe__start, TOXE__START, 0);
+	defun(env, "toxe--bootstrap", 3, 3, toxe__bootstrap, TOXE__BOOTSTRAP, 0);
+	defun(env, "toxe--save", 2, 2, toxe__save, TOXE__SAVE, 0);
+	defun(env, "toxe--stop", 0, 0, toxe__stop, TOXE__STOP, 0);
 	defun(env, "toxe-self-set-name", 1, 1, toxe_self_set_name,
 	    TOXE_SELF_SET_NAME, 0);
 	defun(env, "toxe-self-set-status-message", 1, 1,
@@ -521,10 +827,10 @@ emacs_module_init(struct emacs_runtime *ert)
 	defun(env, "toxe-iterate", 0, 0, toxe_iterate, TOXE_ITERATE, 0);
 	defun(env, "toxe-self-get-address", 0, 0, toxe_self_get_address,
 	    TOXE_SELF_GET_ADDRESS, 0);
-	defun(env, "toxe-friend-add", 0, 2, toxe_friend_add, TOXE_FRIEND_ADD, 0);
-	defun(env, "toxe-friend-add-norequest", 0, 2, toxe_friend_add_norequest,
+	defun(env, "toxe-friend-add", 2, 2, toxe_friend_add, TOXE_FRIEND_ADD, 0);
+	defun(env, "toxe-friend-add-norequest", 1, 1, toxe_friend_add_norequest,
 	    TOXE_FRIEND_ADD_NOREQUEST, 0);
-	defun(env, "toxe-friend-send-message", 0, 3, toxe_friend_send_message,
+	defun(env, "toxe-friend-send-message", 3, 3, toxe_friend_send_message,
 	    TOXE_FRIEND_SEND_MESSAGE, 0);
 
 	/* (provide 'toxe-core) */
