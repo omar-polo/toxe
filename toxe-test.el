@@ -15,7 +15,8 @@ what will be fed to toxe' standard input."
   "Sends P to toxe running in parse test, yielding its output."
   (let ((out (toxe-test-call "p"
                              (with-output-to-string
-                               (princ p)))))
+                               (prin1 p)
+                               (princ "\n")))))
     (unless out
       (signal 'error (format "toxe crashed with input %s" p)))
     (read out)))
