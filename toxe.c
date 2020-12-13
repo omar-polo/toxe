@@ -852,8 +852,25 @@ process_stdin(Tox *tox)
 __dead void
 usage(const char *me, int s)
 {
-	fprintf(stderr, "USAGE: %s [-s savepath]\n", me);
+	fprintf(stderr, "USAGE: %s [-s savepath] [-T test-mode]\n", me);
 	exit(s);
+}
+
+int
+parse_testmode()
+{
+	char *line = NULL;
+	size_t linesize = 0;
+	ssize_t linelen;
+	struct cons *cmd;
+
+	if ((linelen = getline(&line, &linesize, stdin)) == -1)
+		err(1, "getline");
+	cmd = read_plist(line);
+	pp(cmd);
+	free(line);
+	list_free(cmd);
+	return 0;
 }
 
 int
@@ -861,11 +878,13 @@ main(int argc, char **argv)
 {
 	int ch;
 	Tox *tox;
+	enum test_mode tm;
 
 	savepath = NULL;
 	savepath_tmp = NULL;
 
-	while ((ch = getopt(argc, argv, "s:")) != -1) {
+	tm = TEST_NONE;
+	while ((ch = getopt(argc, argv, "s:T:")) != -1) {
 		switch (ch) {
 		case 's':
 			if ((savepath = strdup(optarg)) == NULL)
@@ -874,9 +893,26 @@ main(int argc, char **argv)
 				err(1, "asprintf");
 			break;
 
+		case 'T':
+			switch (*optarg) {
+			case 'p':
+				tm = TEST_PARSE;
+				break;
+			default:
+				errx(1, "unknown test type: %c", *optarg);
+			}
+			break;
+
 		default:
 			usage(*argv, 1);
 		}
+	}
+
+	switch (tm) {
+	case TEST_PARSE:
+		return parse_testmode();
+	default:
+		break;
 	}
 
 	if ((tox = init_tox()) == NULL)

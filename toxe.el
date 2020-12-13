@@ -8,23 +8,6 @@
 
 (require 'cl-lib)
 
-;; don't require dynamic module at byte compile time.
-(declare-function toxe--start                  "toxe-core" (savepath))
-(declare-function toxe--bootstap               "toxe-core" (host port public-key))
-(declare-function toxe--save                   "toxe-core" (path tmp))
-(declare-function toxe--stop                   "toxe-core" ())
-(declare-function toxe-self-set-name           "toxe-core" (name))
-(declare-function toxe-self-set-status-message "toxe-core" (msg))
-(declare-function toxe-iteration-interval      "toxe-core" ())
-(declare-function toxe-iterate                 "toxe-core" ())
-(declare-function toxe-self-get-address        "toxe-core" ())
-(declare-function toxe-friend-add              "toxe-core" (pk msg))
-(declare-function toxe-friend-add-norequest    "toxe-core" (pk))
-(declare-function toxe-friend-send-message     "toxe-core" (friend-number type msg))
-
-(cl-eval-when (load eval)
-  (require 'toxe-core))
-
 
 ;;; vars
 
@@ -51,9 +34,6 @@ List of triple (HOST PORT PUBLIC-KEY).")
 (defvar toxe-connection-status 'toxe-connection-none
   "The status of the connection.  Must be considered read-only.")
 
-(defvar toxe--timer nil
-  "The internal timer used to fetch updates.")
-
 
 ;;; hooks
 
@@ -71,7 +51,8 @@ string.")
 
 (defvar toxe-self-connection-status-hook (list #'toxe--self-connection-changed)
   "Hook called upon network status changes.
-The functions will get called with a symbol representing the status of the connection:
+The functions will get called with a symbol representing the
+status of the connection:
 
  - toxe-connection-none    :: offline
  - toxe-connection-tcp     :: online (tcp)
@@ -79,52 +60,11 @@ The functions will get called with a symbol representing the status of the conne
  - toxe-connection-unknown :: unknown")
 
 
-;;; errors
-
-(define-error 'toxe-new-error "failure during initialisation"
-  'error)
-
-(define-error 'toxe-bootstrap-error "failure during bootstrapping"
-  'error)
-
-(define-error 'toxe-malformed-string "message couldn't be decoded as UTF8 string"
-  'wrong-type-argument)
-
-
 ;;; implementation
 
-(defun toxe-save ()
-  "Save the client info in `toxe-savedata-dir'."
-  (when toxe-savedata-dir
-    (let* ((path (expand-file-name "toxe.data" toxe-savedata-dir))
-           (tmp  (concat path ".tmp")))
-      (toxe--save path tmp))))
-
-(defun toxe-start ()
-  "Start the client."
-  (when (if toxe-savedata-dir
-            (toxe--start (expand-file-name "toxe.data" toxe-savedata-dir))
-          (toxe--start nil))
-    (toxe-self-set-name toxe-user-name)
-    (toxe-self-set-status-message toxe-status-message)
-    (dolist (spec toxe-bootstrap-nodes)
-      (condition-case err
-          (apply #'toxe--bootstrap spec)
-        (toxe-bootstrap-error (message "failure (but we continued) with %s: %s"
-                                       spec err))))
-    (setq toxe--timer (run-with-timer nil
-                                      (/ (toxe-iteration-interval) 1000.0)
-                                      #'toxe-iterate))
-    (toxe-save)))
-
-(defun toxe-stop ()
-  "Stops the client."
-  (when toxe--timer
-    (cancel-timer toxe--timer))
-  (toxe-save)
-  (toxe--stop))
-
 (defun toxe--self-connection-changed (status)
+  "Default callback for connection status change.
+STATUS is the new status of the client."
   (setq toxe-connection-status status)
   (message "toxe: connection status: %s" status))
 
@@ -135,6 +75,9 @@ Meant to be added to the toxe-friend-request-hook."
   (toxe-friend-add-norequest pk))
 
 (defun toxe-log-friend-message (friend-number msg-type msg)
+  "Default callback for a friend message.
+FRIEND-NUMBER represents the frined, MSG-TYPE is the message type
+and MSG the content of the message."
   (message "toxe: got message (%s) from %s: %s" msg-type friend-number msg))
 
 (provide 'toxe)
