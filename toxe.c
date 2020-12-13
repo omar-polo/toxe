@@ -598,7 +598,8 @@ hself_set_status_msg(Tox *tox, struct cons *opts)
 	return 1;
 
 err:
-	PPP(MAKE_KEYWORD("@status"),	NULL);
+	PPP(MAKE_KEYWORD("@status"),	NULL,
+	    MAKE_KEYWORD("@err"),	MAKE_STRING(errstr));
 	return 1;
 }
 
