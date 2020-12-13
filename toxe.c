@@ -630,9 +630,6 @@ hfriend_add(Tox *tox, struct cons *opts)
 	}
 
 	if (!extract_message(opts, &msg))
-		msg = NULL;
-
-	if (msg == NULL)
 		tox_friend_add_norequest(tox, pk, &err);
 	else
 		tox_friend_add(tox, pk, msg, strlen(msg), &err);
