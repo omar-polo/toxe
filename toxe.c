@@ -12,6 +12,11 @@
 
 #include "toxe.h"
 
+/*
+ * CAVEATS:
+ * - can output symbols but cannot parse 'em
+ */
+
 char *savepath, *savepath_tmp;
 
 
@@ -189,6 +194,10 @@ pp_atom(struct atom *a)
 		printf(":%s", a->str);
 		break;
 
+	case ASYM:
+		printf("%s", a->str);
+		break;
+
 	case ASTR:
 		printf("\"");
 		for (i = a->str; *i; ++i)
@@ -220,7 +229,8 @@ pp(struct cons *list)
 
         for (; list != NULL; list = cdr(list)) {
 		pp_atom(car(list));
-		printf(" ");
+		if (cdr(list) != NULL)
+			printf(" ");
 	}
 
 	printf(")\n");
@@ -362,7 +372,7 @@ handle_friend_request(Tox *tox, const uint8_t *pk, const uint8_t *msg,
 		message = MAKE_STRING("<invalid utf8 message>");
 
 	pl = plist(NULL,
-	    MAKE_KEYWORD("@type"),	MAKE_STRING("friend-request"),
+	    MAKE_KEYWORD("@type"),	MAKE_SYMBOL("friend-request"),
 	    MAKE_KEYWORD("public-key"),	MAKE_STRING(pk),
 	    MAKE_KEYWORD("message"),	message,
 	    NULL);
@@ -385,18 +395,18 @@ handle_friend_message(Tox *tox, uint32_t fnum, TOX_MESSAGE_TYPE t,
 
 	switch (t) {
 	case TOX_MESSAGE_TYPE_NORMAL:
-		message = MAKE_STRING("normal");
+		message = MAKE_SYMBOL("normal");
 		break;
 	case TOX_MESSAGE_TYPE_ACTION:
-		message = MAKE_STRING("action");
+		message = MAKE_SYMBOL("action");
 		break;
 	default:
-		message = MAKE_STRING("unknown");
+		message = MAKE_SYMBOL("unknown");
 		break;
 	}
 
 	pl = plist(NULL,
-	    MAKE_KEYWORD("@type"),		MAKE_STRING("friend-message"),
+	    MAKE_KEYWORD("@type"),		MAKE_SYMBOL("friend-message"),
 	    MAKE_KEYWORD("friend-number"),	MAKE_INTEGER(fnum),
 	    MAKE_KEYWORD("message"),		message,
 	    NULL);
@@ -413,21 +423,21 @@ handle_conn_status(Tox *tox, TOX_CONNECTION status, void *udata)
 
 	switch (status) {
 	case TOX_CONNECTION_NONE:
-		st = MAKE_STRING("offline");
+		st = MAKE_SYMBOL("offline");
 		break;
 	case TOX_CONNECTION_TCP:
-		st = MAKE_STRING("tcp");
+		st = MAKE_SYMBOL("tcp");
 		break;
 	case TOX_CONNECTION_UDP:
-		st = MAKE_STRING("udp");
+		st = MAKE_SYMBOL("udp");
 		break;
 	default:
-		st = MAKE_STRING("unknown");
+		st = MAKE_SYMBOL("unknown");
 		break;
 	}
 
 	pl = plist(NULL,
-	    MAKE_KEYWORD("@type"),	MAKE_STRING("connection-status"),
+	    MAKE_KEYWORD("@type"),	MAKE_SYMBOL("connection-status"),
 	    MAKE_KEYWORD("status"),	st,
 	    NULL);
 
@@ -537,7 +547,7 @@ hself_set_name(Tox *tox, struct cons *opts)
 	}
 
 	pl = plist(NULL,
-	    MAKE_KEYWORD("@status"),	MAKE_STRING("t"),
+	    MAKE_KEYWORD("@status"),	MAKE_SYMBOL("t"),
 	    NULL);
 	pp(pl);
 	list_free(pl);
@@ -546,7 +556,7 @@ hself_set_name(Tox *tox, struct cons *opts)
 err:
 	pl = plist(NULL,
 	    MAKE_KEYWORD("@status"),	NULL,
-	    MAKE_KEYWORD("@err"),	MAKE_STRING(errstr),
+	    MAKE_KEYWORD("@err"),	MAKE_SYMBOL(errstr),
 	    NULL);
 	pp(pl);
 	list_free(pl);
@@ -566,7 +576,7 @@ hself_set_status_msg(Tox *tox, struct cons *opts)
 
 	tox_self_set_status_message(tox, msg, strlen(msg), NULL);
 	pl = plist(NULL,
-	    MAKE_KEYWORD("@status"),	MAKE_STRING("t"),
+	    MAKE_KEYWORD("@status"),	MAKE_SYMBOL("t"),
 	    NULL);
 	pp(pl);
 	list_free(pl);
@@ -626,7 +636,7 @@ hfriend_add(Tox *tox, struct cons *opts)
 	}
 
 	pl = plist(NULL,
-	    MAKE_KEYWORD("@status"),	MAKE_STRING("t"),
+	    MAKE_KEYWORD("@status"),	MAKE_SYMBOL("t"),
 	    NULL);
 	pp(pl);
 	list_free(pl);
@@ -673,7 +683,7 @@ hfriend_send_msg(Tox *tox, struct cons *opts)
 	}
 
 	pl = plist(NULL,
-	    MAKE_KEYWORD("@status"),	MAKE_STRING("t"),
+	    MAKE_KEYWORD("@status"),	MAKE_SYMBOL("t"),
 	    NULL);
 	free(pl);
 	return 1;
@@ -694,7 +704,7 @@ hquit(Tox *tox, struct cons *opts)
 	struct cons *pl;
 
 	pl = plist(NULL,
-	    MAKE_KEYWORD("@status"), MAKE_STRING("t"),
+	    MAKE_KEYWORD("@status"), MAKE_SYMBOL("t"),
 	    NULL);
 	pp(pl);
 	list_free(pl);
