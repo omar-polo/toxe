@@ -113,12 +113,6 @@ list_free(struct cons *l)
 }
 
 struct cons *
-pcons(struct cons *plist, struct atom *key, struct atom *val)
-{
-	return append(plist, cons(key, cons(val, NULL)));
-}
-
-struct cons *
 append(struct cons *a, struct cons *b)
 {
 	struct cons *s;

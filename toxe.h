@@ -46,7 +46,6 @@ struct atom		*make_strkey(const char*, size_t, int);
 struct atom		*make_integer(int64_t);
 struct cons		*cons(struct atom*, struct cons*);
 void			 list_free(struct cons*);
-struct cons		*pcons(struct cons*, struct atom*, struct atom*);
 struct cons		*append(struct cons*, struct cons*);
 struct atom		*car(struct cons*);
 struct cons		*cdr(struct cons*);
