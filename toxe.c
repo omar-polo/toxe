@@ -23,6 +23,20 @@ char *savepath, *savepath_tmp;
 /* plist impl. */
 
 struct atom *
+make_string_check(const char *s, size_t len)
+{
+	if (toxe_is_valid_utf8(s, len))
+		return make_strkey(s, len, ASTR);
+	return MAKE_SYMBOL("invalid-utf8");
+}
+
+struct atom *
+make_string(const char *s, size_t len)
+{
+	return make_strkey(s, len, ASTR);
+}
+
+struct atom *
 make_strkey(const char *s, size_t len, int type)
 {
 	struct atom *a;
@@ -355,95 +369,115 @@ hex2bin(const char *h, size_t len, uint8_t *b)
 
 
 
+struct atom *
+convert_user_status(TOX_USER_STATUS s)
+{
+	switch (s) {
+	case TOX_USER_STATUS_NONE:
+		return MAKE_SYMBOL("none");
+	case TOX_USER_STATUS_AWAY:
+		return MAKE_SYMBOL("away");
+	case TOX_USER_STATUS_BUSY:
+		return MAKE_SYMBOL("busy");
+	default:
+		return MAKE_SYMBOL("unknown");
+	}
+}
+
+struct atom *
+convert_connection(TOX_CONNECTION c)
+{
+	switch (c) {
+	case TOX_CONNECTION_NONE:
+		return MAKE_SYMBOL("none");
+	case TOX_CONNECTION_TCP:
+		return MAKE_SYMBOL("tcp");
+	case TOX_CONNECTION_UDP:
+		return MAKE_SYMBOL("udp");
+	default:
+		return MAKE_SYMBOL("unknown");
+	}
+}
+
+struct atom *
+convert_message_type(TOX_MESSAGE_TYPE t)
+{
+	switch (t) {
+	case TOX_MESSAGE_TYPE_NORMAL:
+		return MAKE_SYMBOL("normal");
+	case TOX_MESSAGE_TYPE_ACTION:
+		return MAKE_SYMBOL("action");
+	default:
+		return MAKE_SYMBOL("unknown");
+	}
+}
+
+
+
 void
 handle_friend_request(Tox *tox, const uint8_t *pk, const uint8_t *msg,
     size_t len, void *udata)
 {
-	struct cons *pl;
-	struct atom *message;
 	char key[2*TOX_PUBLIC_KEY_SIZE + 1];
 
 	bzero(key, sizeof(key));
 	bin2hex(pk, TOX_PUBLIC_KEY_SIZE, key);
 
-	if (toxe_is_valid_utf8((const char*)msg, len))
-		message = make_strkey(msg, len, ASTR);
-	else
-		message = MAKE_STRING("<invalid utf8 message>");
-
-	pl = plist(NULL,
-	    MAKE_KEYWORD("@type"),	MAKE_SYMBOL("friend-request"),
-	    MAKE_KEYWORD("public-key"),	MAKE_STRING(key),
-	    MAKE_KEYWORD("message"),	message,
-	    NULL);
-
-	pp(pl);
-	list_free(pl);
+	PPP(MAKE_KEYWORD("@type"),	MAKE_SYMBOL("friend-request"),
+	    MAKE_KEYWORD("public-key"),	make_string(key, sizeof(key)),
+	    MAKE_KEYWORD("message"),	make_string_check(msg, len));
 }
 
 void
 handle_friend_message(Tox *tox, uint32_t fnum, TOX_MESSAGE_TYPE t,
     const uint8_t *msg, size_t len, void *udata)
 {
-	struct cons *pl;
-	struct atom *message, *message_type;
-
-	if (toxe_is_valid_utf8((const char*)msg, len))
-		message = make_strkey(msg, len, ASTR);
-	else
-		message = MAKE_STRING("<invalid utf8 message>");
-
-	switch (t) {
-	case TOX_MESSAGE_TYPE_NORMAL:
-		message_type = MAKE_SYMBOL("normal");
-		break;
-	case TOX_MESSAGE_TYPE_ACTION:
-		message_type = MAKE_SYMBOL("action");
-		break;
-	default:
-		message_type = MAKE_SYMBOL("unknown");
-		break;
-	}
-
-	pl = plist(NULL,
-	    MAKE_KEYWORD("@type"),		MAKE_SYMBOL("friend-message"),
+	PPP(MAKE_KEYWORD("@type"),		MAKE_SYMBOL("friend-message"),
 	    MAKE_KEYWORD("friend-number"),	MAKE_INTEGER(fnum),
-	    MAKE_KEYWORD("message-type"),	message_type,
-	    MAKE_KEYWORD("message"),		message,
-	    NULL);
-
-	pp(pl);
-	list_free(pl);
+	    MAKE_KEYWORD("message-type"),	convert_message_type(t),
+	    MAKE_KEYWORD("message"),		make_string_check(msg, len));
 }
 
 void
 handle_conn_status(Tox *tox, TOX_CONNECTION status, void *udata)
 {
-	struct cons *pl;
-	struct atom *st;
+	PPP(MAKE_KEYWORD("@type"),		MAKE_SYMBOL("connection-status"),
+	    MAKE_KEYWORD("connection-status"),	convert_connection(status));
+}
 
-	switch (status) {
-	case TOX_CONNECTION_NONE:
-		st = MAKE_SYMBOL("offline");
-		break;
-	case TOX_CONNECTION_TCP:
-		st = MAKE_SYMBOL("tcp");
-		break;
-	case TOX_CONNECTION_UDP:
-		st = MAKE_SYMBOL("udp");
-		break;
-	default:
-		st = MAKE_SYMBOL("unknown");
-		break;
-	}
+void
+handle_friend_name(Tox *tox, uint32_t fnum, const uint8_t *name, size_t len,
+    void *udata)
+{
+	PPP(MAKE_KEYWORD("@type"),		MAKE_SYMBOL("friend-name"),
+	    MAKE_KEYWORD("friend-number"),	MAKE_INTEGER(fnum),
+	    MAKE_KEYWORD("name"),		make_string_check(name, len));
+}
 
-	pl = plist(NULL,
-	    MAKE_KEYWORD("@type"),	MAKE_SYMBOL("connection-status"),
-	    MAKE_KEYWORD("status"),	st,
-	    NULL);
+void
+handle_friend_status_message(Tox *tox, uint32_t fnum, const uint8_t *msg,
+    size_t len, void *udata)
+{
+	PPP(MAKE_KEYWORD("@type"),		MAKE_SYMBOL("friend-status-message"),
+	    MAKE_KEYWORD("friend-number"),	MAKE_INTEGER(fnum),
+	    MAKE_KEYWORD("message"),		make_string_check(msg, len));
+}
 
-	pp(pl);
-	list_free(pl);
+void
+handle_friend_status(Tox *tox, uint32_t fnum, TOX_USER_STATUS s, void *udata)
+{
+	PPP(MAKE_KEYWORD("@type"),		MAKE_SYMBOL("friend-status"),
+	    MAKE_KEYWORD("friend-number"),	MAKE_INTEGER(fnum),
+	    MAKE_KEYWORD("status"),		convert_user_status(s));
+}
+
+void
+handle_friend_connection_status(Tox *tox, uint32_t fnum, TOX_CONNECTION c,
+    void *udata)
+{
+	PPP(MAKE_KEYWORD("@type"),		MAKE_SYMBOL("friend-connection-status"),
+	    MAKE_KEYWORD("friend-number"),	MAKE_INTEGER(fnum),
+	    MAKE_KEYWORD("connection-status"),	convert_connection(c));
 }
 
 
@@ -539,7 +573,6 @@ int
 hself_set_name(Tox *tox, struct cons *opts)
 {
 	char *name, *errstr;
-	struct cons *pl;
 
 	if (!extract_name(opts, &name)) {
 		errstr = "name: wrong type or missing";
@@ -547,21 +580,12 @@ hself_set_name(Tox *tox, struct cons *opts)
 	}
 
 	tox_self_set_name(tox, name, strlen(name), NULL);
-
-	pl = plist(NULL,
-	    MAKE_KEYWORD("@status"),	MAKE_SYMBOL("t"),
-	    NULL);
-	pp(pl);
-	list_free(pl);
+	PPP(MAKE_KEYWORD("@status"),	MAKE_SYMBOL("t"));
 	return 1;
 
 err:
-	pl = plist(NULL,
-	    MAKE_KEYWORD("@status"),	NULL,
-	    MAKE_KEYWORD("@err"),	MAKE_SYMBOL(errstr),
-	    NULL);
-	pp(pl);
-	list_free(pl);
+	PPP(MAKE_KEYWORD("@status"),	NULL,
+	    MAKE_KEYWORD("@err"),	MAKE_STRING(errstr));
 	return 1;
 }
 
@@ -569,7 +593,6 @@ int
 hself_set_status_msg(Tox *tox, struct cons *opts)
 {
 	char *msg, *errstr;
-	struct cons *pl;
 
 	if (!extract_message(opts, &msg)) {
 		errstr = "message: wrong type or missing";
@@ -577,19 +600,11 @@ hself_set_status_msg(Tox *tox, struct cons *opts)
 	}
 
 	tox_self_set_status_message(tox, msg, strlen(msg), NULL);
-	pl = plist(NULL,
-	    MAKE_KEYWORD("@status"),	MAKE_SYMBOL("t"),
-	    NULL);
-	pp(pl);
-	list_free(pl);
+	PPP(MAKE_KEYWORD("@status"),	MAKE_SYMBOL("t"));
 	return 1;
 
 err:
-	pl = plist(NULL,
-	    MAKE_KEYWORD("@status"),	NULL,
-	    NULL);
-	pp(pl);
-	list_free(pl);
+	PPP(MAKE_KEYWORD("@status"),	NULL);
 	return 1;
 }
 
@@ -598,17 +613,12 @@ hself_get_addr(Tox *tox, struct cons *opts)
 {
 	uint8_t self[TOX_ADDRESS_SIZE];
 	char hex[2*TOX_ADDRESS_SIZE+1];
-	struct cons *pl;
 
 	tox_self_get_address(tox, self);
 	bin2hex(self, sizeof(self), hex);
 
-	pl = plist(NULL,
-	    MAKE_KEYWORD("@type"),	MAKE_SYMBOL("self-get-address"),
-	    MAKE_KEYWORD("address"),	MAKE_STRING(hex),
-	    NULL);
-	pp(pl);
-	list_free(pl);
+	PPP(MAKE_KEYWORD("@status"),	MAKE_SYMBOL("t"),
+	    MAKE_KEYWORD("address"),	MAKE_STRING(hex));
 	return 1;
 }
 
@@ -618,7 +628,6 @@ hfriend_add(Tox *tox, struct cons *opts)
 	char *msg, *errstr;
 	uint8_t pk[TOX_PUBLIC_KEY_SIZE];
 	TOX_ERR_FRIEND_ADD err;
-	struct cons *pl;
 
 	if (!extract_pk(opts, pk)) {
 		errstr = "public-key: missing or wrong type";
@@ -638,20 +647,12 @@ hfriend_add(Tox *tox, struct cons *opts)
 		goto err;
 	}
 
-	pl = plist(NULL,
-	    MAKE_KEYWORD("@status"),	MAKE_SYMBOL("t"),
-	    NULL);
-	pp(pl);
-	list_free(pl);
+	PPP(MAKE_KEYWORD("@status"),	MAKE_SYMBOL("t"));
 	return 1;
 
 err:
-	pl = plist(NULL,
-	    MAKE_KEYWORD("@status"),	NULL,
-	    MAKE_KEYWORD("@err"),	MAKE_STRING(errstr),
-	    NULL);
-	pp(pl);
-	list_free(pl);
+	PPP(MAKE_KEYWORD("@status"),	NULL,
+	    MAKE_KEYWORD("@err"),	MAKE_STRING(errstr));
 	return 1;
 }
 
@@ -662,7 +663,6 @@ hfriend_send_msg(Tox *tox, struct cons *opts)
 	char *msg, *errstr;
 	TOX_MESSAGE_TYPE t;
 	TOX_ERR_FRIEND_SEND_MESSAGE err;
-	struct cons *pl;
 
 	if (!extract_friend_number(opts, &fnum)) {
 		errstr = "friend-number: missing or wrong type";
@@ -685,33 +685,96 @@ hfriend_send_msg(Tox *tox, struct cons *opts)
 		goto err;
 	}
 
-	pl = plist(NULL,
-	    MAKE_KEYWORD("@status"),	MAKE_SYMBOL("t"),
-	    NULL);
-	pp(pl);
-	free(pl);
+	PPP(MAKE_KEYWORD("@status"),	MAKE_SYMBOL("t"));
 	return 1;
 
 err:
-	pl = plist(NULL,
-	    MAKE_KEYWORD("@status"),	NULL,
-	    MAKE_KEYWORD("@err"),	MAKE_STRING(errstr),
-	    NULL);
-	pp(pl);
-	free(pl);
+	PPP(MAKE_KEYWORD("@status"),	NULL,
+	    MAKE_KEYWORD("@err"),	MAKE_STRING(errstr));
+	return 1;
+}
+
+int
+hget_chatlist(Tox *tox, struct cons *opts)
+{
+	size_t len, i;
+	uint32_t *flist;
+	uint8_t pk[TOX_PUBLIC_KEY_SIZE];
+	char pk_hex[2*TOX_PUBLIC_KEY_SIZE + 1];
+	char *name, *sm;
+	size_t namelen, smlen;
+	uint64_t last_online;
+	TOX_USER_STATUS ustatus;
+	TOX_CONNECTION conn;
+
+	len = tox_self_get_friend_list_size(tox);
+	if ((flist = calloc(sizeof(uint32_t), len)) == NULL)
+		return 0;
+
+	tox_self_get_friend_list(tox, flist);
+
+	PPP(MAKE_KEYWORD("@type"), MAKE_SYMBOL("chatlist-start"));
+
+	for (i = 0; i < len; ++i) {
+		if (!tox_friend_get_public_key(tox, flist[i], pk, NULL))
+			goto err;
+		bzero(pk_hex, sizeof(pk_hex));
+		bin2hex(pk, TOX_PUBLIC_KEY_SIZE, pk_hex);
+
+		last_online = tox_friend_get_last_online(tox, flist[i], NULL);
+		ustatus = tox_friend_get_status(tox, flist[i], NULL);
+		conn = tox_friend_get_connection_status(tox, flist[i], NULL);
+
+		namelen = tox_friend_get_name_size(tox, flist[i], NULL);
+                if ((name = calloc(1, namelen+1)) == NULL)
+			goto err;
+		if (!tox_friend_get_name(tox, flist[i], name, NULL)) {
+			free(name);
+			goto err;
+		}
+
+		smlen = tox_friend_get_status_message_size(tox, flist[i], NULL);
+		if ((sm = calloc(1, smlen+1)) == NULL) {
+			free(name);
+			goto err;
+		}
+		if (!tox_friend_get_status_message(tox, flist[i], sm, NULL)) {
+			free(name);
+			free(sm);
+			goto err;
+		}
+
+		PPP(MAKE_KEYWORD("@type"),		MAKE_SYMBOL("chatlist-entry"),
+		    MAKE_KEYWORD("@status"),		MAKE_SYMBOL("t"),
+		    MAKE_KEYWORD("friend-number"),	MAKE_INTEGER(flist[i]),
+		    MAKE_KEYWORD("public-key"),		MAKE_STRING(pk_hex),
+		    MAKE_KEYWORD("last-seen"),		MAKE_INTEGER(last_online),
+		    MAKE_KEYWORD("status"),		convert_user_status(ustatus),
+		    MAKE_KEYWORD("name"),		make_string_check(name, namelen),
+		    MAKE_KEYWORD("status-msg"),		make_string_check(sm, smlen),
+		    MAKE_KEYWORD("conn-status"),	convert_connection(conn));
+
+		free(name);
+		free(sm);
+	}
+
+	PPP(MAKE_KEYWORD("@type"),	MAKE_SYMBOL("chatlist-end"),
+	    MAKE_KEYWORD("@status"),	MAKE_SYMBOL("t"));
+
+	free(flist);
+	return 1;
+
+err:
+	PPP(MAKE_KEYWORD("@type"),	MAKE_SYMBOL("chatlist-end"),
+	    MAKE_KEYWORD("@status"),	NULL);
+	free(flist);
 	return 1;
 }
 
 int
 hquit(Tox *tox, struct cons *opts)
 {
-	struct cons *pl;
-
-	pl = plist(NULL,
-	    MAKE_KEYWORD("@status"), MAKE_SYMBOL("t"),
-	    NULL);
-	pp(pl);
-	list_free(pl);
+	PPP(MAKE_KEYWORD("@status"), MAKE_SYMBOL("t"));
 	return 0;
 }
 
@@ -802,7 +865,6 @@ int
 process_plist(Tox *tox, struct cons *cmd)
 {
 	struct atom *at_type;
-	struct cons *pl;
 
 	struct {
 		struct atom type;
@@ -813,6 +875,7 @@ process_plist(Tox *tox, struct cons *cmd)
 		{INIT_STRING("self-get-address"),		hself_get_addr},
 		{INIT_STRING("friend-add"),			hfriend_add},
 		{INIT_STRING("friend-send-message"),		hfriend_send_msg},
+		{INIT_STRING("get-chatlist"),			hget_chatlist},
 		{INIT_STRING("quit"),				hquit},
 		{INIT_STRING(""),				NULL},
 	}, *h;
@@ -827,14 +890,8 @@ process_plist(Tox *tox, struct cons *cmd)
 			return h->fn(tox, cmd);
 	}
 
-	pl = plist(NULL,
-	    MAKE_KEYWORD("@status"),	NULL,
-	    MAKE_KEYWORD("@err"),	MAKE_STRING("unknown command"),
-	    NULL);
-	pp(pl);
-	list_free(pl);
-
-	return 1;
+	warnx("unknown @type %s", at_type->str);
+	return 0;
 }
 
 int
@@ -936,6 +993,10 @@ main(int argc, char **argv)
 	tox_callback_friend_request(tox, handle_friend_request);
 	tox_callback_friend_message(tox, handle_friend_message);
 	tox_callback_self_connection_status(tox, handle_conn_status);
+	tox_callback_friend_name(tox, handle_friend_name);
+	tox_callback_friend_status_message(tox, handle_friend_status_message);
+	tox_callback_friend_status(tox, handle_friend_status);
+	tox_callback_friend_connection_status(tox, handle_friend_connection_status);
 
 	if (!save_tox(tox))
 		errx(1, "cannot save tox");

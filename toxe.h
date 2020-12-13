@@ -31,6 +31,17 @@ struct cons {
 #define CADR(x)	(car(cdr(x)))
 #define CDDR(x) (cdr(cdr(x)))
 
+/* Pretty Print Plist */
+#define PPP(...)					\
+	do {						\
+		struct cons *pl;			\
+		pl = plist(NULL, __VA_ARGS__, NULL);	\
+		pp(pl);					\
+		list_free(pl);				\
+	} while (0)
+
+struct atom		*make_string_check(const char*, size_t);
+struct atom		*amke_string(const char*, size_t);
 struct atom		*make_strkey(const char*, size_t, int);
 struct atom		*make_integer(int64_t);
 struct cons		*cons(struct atom*, struct cons*);
@@ -51,17 +62,30 @@ struct cons		*read_plist(const char*);
 void			 bin2hex(const uint8_t*, size_t, char*);
 void			 hex2bin(const char*, size_t, uint8_t*);
 
+struct atom		*convert_user_status(TOX_USER_STATUS);
+struct atom		*convert_connection(TOX_CONNECTION);
+struct atom		*convert_message_type(TOX_MESSAGE_TYPE);
+
 void			 handle_friend_request(Tox*, const uint8_t*, const uint8_t*, size_t, void*);
 void			 handle_friend_message(Tox*, uint32_t, TOX_MESSAGE_TYPE, const uint8_t*, size_t, void*);
 void			 handle_conn_status(Tox*, TOX_CONNECTION, void*);
+void			 handle_friend_name(Tox*, uint32_t, const uint8_t*, size_t, void*);
+void			 handle_friend_status_message(Tox*, uint32_t, const uint8_t*, size_t, void*);
+void			 handle_friend_status(Tox*, uint32_t, TOX_USER_STATUS, void*);
+void			 handle_friend_connection_status(Tox*, uint32_t, TOX_CONNECTION, void*);
 
 int			 extract_friend_number(struct cons*, uint32_t*);
+int			 extract_message(struct cons*, char**);
+int			 extract_message_type(struct cons*, TOX_MESSAGE_TYPE*);
+int			 extract_pk(struct cons*, uint8_t*);
+int			 extract_name(struct cons*, char**);
 
 int			 hself_set_name(Tox*, struct cons*);
 int			 hself_set_status_msg(Tox*, struct cons*);
 int			 hself_get_addr(Tox*, struct cons*);
 int			 hfriend_add(Tox*, struct cons*);
 int			 hfriend_send_msg(Tox*, struct cons*);
+int			 hget_chatlist(Tox*, struct cons*);
 int			 hquit(Tox*, struct cons*);
 
 Tox			*init_tox(void);
