@@ -373,7 +373,7 @@ handle_friend_request(Tox *tox, const uint8_t *pk, const uint8_t *msg,
 
 	pl = plist(NULL,
 	    MAKE_KEYWORD("@type"),	MAKE_SYMBOL("friend-request"),
-	    MAKE_KEYWORD("public-key"),	MAKE_STRING(pk),
+	    MAKE_KEYWORD("public-key"),	MAKE_STRING(key),
 	    MAKE_KEYWORD("message"),	message,
 	    NULL);
 
@@ -386,7 +386,7 @@ handle_friend_message(Tox *tox, uint32_t fnum, TOX_MESSAGE_TYPE t,
     const uint8_t *msg, size_t len, void *udata)
 {
 	struct cons *pl;
-	struct atom *message;
+	struct atom *message, *message_type;
 
 	if (toxe_is_valid_utf8((const char*)msg, len))
 		message = make_strkey(msg, len, ASTR);
@@ -395,19 +395,20 @@ handle_friend_message(Tox *tox, uint32_t fnum, TOX_MESSAGE_TYPE t,
 
 	switch (t) {
 	case TOX_MESSAGE_TYPE_NORMAL:
-		message = MAKE_SYMBOL("normal");
+		message_type = MAKE_SYMBOL("normal");
 		break;
 	case TOX_MESSAGE_TYPE_ACTION:
-		message = MAKE_SYMBOL("action");
+		message_type = MAKE_SYMBOL("action");
 		break;
 	default:
-		message = MAKE_SYMBOL("unknown");
+		message_type = MAKE_SYMBOL("unknown");
 		break;
 	}
 
 	pl = plist(NULL,
 	    MAKE_KEYWORD("@type"),		MAKE_SYMBOL("friend-message"),
 	    MAKE_KEYWORD("friend-number"),	MAKE_INTEGER(fnum),
+	    MAKE_KEYWORD("message-type"),	message_type,
 	    MAKE_KEYWORD("message"),		message,
 	    NULL);
 
@@ -491,9 +492,9 @@ extract_message_type(struct cons *plist, TOX_MESSAGE_TYPE *ret)
 	if (i->type != ASTR)
 		return 0;
 
-	if (eq(i, &INIT_KEYWORD("normal")))
+	if (eq(i, &INIT_STRING("normal")))
 		*ret = TOX_MESSAGE_TYPE_NORMAL;
-	else if (eq(i, &INIT_KEYWORD("action")))
+	else if (eq(i, &INIT_STRING("action")))
 		*ret = TOX_MESSAGE_TYPE_ACTION;
 	else
 		return 0;
@@ -505,7 +506,7 @@ extract_pk(struct cons *plist, uint8_t *pk)
 {
 	struct atom *i;
 
-	if ((i = plist_get(plist, &INIT_KEYWORD("private-key"))) == NULL)
+	if ((i = plist_get(plist, &INIT_KEYWORD("public-key"))) == NULL)
 		return 0;
 	if (i->type != ASTR)
 		return 0;
@@ -513,7 +514,6 @@ extract_pk(struct cons *plist, uint8_t *pk)
 		return 0;
 
 	hex2bin(i->str, 2*TOX_PUBLIC_KEY_SIZE, pk);
-
 	return 1;
 }
 
@@ -545,6 +545,8 @@ hself_set_name(Tox *tox, struct cons *opts)
 		errstr = "name: wrong type or missing";
 		goto err;
 	}
+
+	tox_self_set_name(tox, name, strlen(name), NULL);
 
 	pl = plist(NULL,
 	    MAKE_KEYWORD("@status"),	MAKE_SYMBOL("t"),
@@ -602,7 +604,8 @@ hself_get_addr(Tox *tox, struct cons *opts)
 	bin2hex(self, sizeof(self), hex);
 
 	pl = plist(NULL,
-	    MAKE_KEYWORD("address"), MAKE_STRING(hex),
+	    MAKE_KEYWORD("@type"),	MAKE_SYMBOL("self-get-address"),
+	    MAKE_KEYWORD("address"),	MAKE_STRING(hex),
 	    NULL);
 	pp(pl);
 	list_free(pl);
@@ -685,6 +688,7 @@ hfriend_send_msg(Tox *tox, struct cons *opts)
 	pl = plist(NULL,
 	    MAKE_KEYWORD("@status"),	MAKE_SYMBOL("t"),
 	    NULL);
+	pp(pl);
 	free(pl);
 	return 1;
 
@@ -725,6 +729,7 @@ init_tox(void)
 
 	tox_options_default(&opts);
 	opts.ipv6_enabled = 0;
+	opts.udp_enabled = 1;
 
 	if (savepath == NULL || (f = fopen(savepath, "r")) == NULL)
 		tox = tox_new(&opts, &err_new);
@@ -934,6 +939,9 @@ main(int argc, char **argv)
 
 	if (!save_tox(tox))
 		errx(1, "cannot save tox");
+
+	hself_get_addr(tox, NULL);
+	handle_conn_status(tox, tox_self_get_connection_status(tox), NULL);
 
 	while (1) {
 		tox_iterate(tox, NULL);

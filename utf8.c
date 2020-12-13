@@ -44,9 +44,8 @@ static const uint8_t utf8d[] = {
 	1,3,1,1,1,1,1,3,1,3,1,1,1,1,1,1,1,3,1,1,1,1,1,1,1,1,1,1,1,1,1,1, // s7..s8
 };
 
-/* renamed to provent collision. */
-uint32_t inline
-toxe_decode(uint32_t* state, uint32_t* codep, uint32_t byte) {
+static uint32_t inline
+decode(uint32_t* state, uint32_t* codep, uint32_t byte) {
 	uint32_t type = utf8d[byte];
 
 	*codep = (*state != UTF8_ACCEPT) ?
@@ -66,7 +65,7 @@ toxe_is_valid_utf8(const char *s, size_t len)
 	uint32_t state = 0;
 
 	for (i = 0; i < len && *s; ++i)
-		toxe_decode(&state, &codepoint, (uint8_t)s[i]);
+		decode(&state, &codepoint, (uint8_t)s[i]);
 
 	return state == UTF8_ACCEPT;
 }
