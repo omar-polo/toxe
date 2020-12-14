@@ -2,6 +2,7 @@
 #include <err.h>
 #include <inttypes.h>
 #include <poll.h>
+#include <signal.h>
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -26,7 +27,15 @@ struct dht_node {
 
 size_t nodes_len = 0;
 
+volatile sig_atomic_t intr = 0;
+
 char *savepath, *savepath_tmp;
+
+void
+sigint_handler(int signo)
+{
+	intr = 1;
+}
 
 
 /* plist impl. */
@@ -1064,6 +1073,8 @@ main(int argc, char **argv)
 		break;
 	}
 
+	signal(SIGINT, sigint_handler);
+
 	if ((tox = init_tox()) == NULL)
 		errx(1, "can't initialize tox");
 
@@ -1081,7 +1092,7 @@ main(int argc, char **argv)
 	hself_get_addr(tox, NULL);
 	handle_conn_status(tox, tox_self_get_connection_status(tox), NULL);
 
-	while (1) {
+	while (!intr) {
 		tox_iterate(tox, NULL);
 		if (stdin_ready())
 			if (!process_stdin(tox))
