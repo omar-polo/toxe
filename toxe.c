@@ -27,9 +27,9 @@ struct dht_node {
 
 size_t nodes_len = 0;
 
-volatile sig_atomic_t intr = 0;
-
 char *savepath, *savepath_tmp;
+
+volatile sig_atomic_t intr = 0;
 
 void
 sigint_handler(int signo)

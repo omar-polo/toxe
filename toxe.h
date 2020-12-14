@@ -40,6 +40,8 @@ struct cons {
 		list_free(pl);				\
 	} while (0)
 
+void			 sigint_handler(int);
+
 struct atom		*make_string_check(const char*, size_t);
 struct atom		*amke_string(const char*, size_t);
 struct atom		*make_strkey(const char*, size_t, int);
