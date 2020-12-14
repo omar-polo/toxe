@@ -3,9 +3,9 @@ CC =		cc
 CFLAGS =	`pkg-config --cflags toxcore` -Wall -g
 LDFLAGS =	`pkg-config --libs   toxcore`
 
-.PHONY: all clean install compile test
+.PHONY: all clean compile test
 
-all: toxe compile TAGS install
+all: toxe compile TAGS
 
 toxe: toxe.o utf8.o
 	${CC} ${LDFLAGS} toxe.o utf8.o -o toxe
@@ -15,9 +15,6 @@ TAGS: *.c
 
 clean:
 	rm -f toxe *.o *.elc TAGS
-
-install:
-	cp toxe ~/bin
 
 compile: toxe.elc toxe-test.elc
 
