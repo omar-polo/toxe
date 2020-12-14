@@ -72,12 +72,12 @@ status of the connection:
 (defun toxe-connection-status ()
   "Return the status of the connection."
   toxe--connection-status)
-
 (defun toxe--make-process ()
   "Start toxe."
   (unless (process-live-p toxe--process)
-    (let* (cmd)
+    (let (cmd)
       (when toxe-savedata-dir
+        (ignore-errors (mkdir toxe-savedata-dir t))
         (push (concat "-s" toxe-savedata-dir "/toxe.data") cmd))
       (cl-loop for (host port key) in toxe-bootstrap-nodes
                do (push (with-output-to-string
