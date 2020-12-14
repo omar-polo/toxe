@@ -92,6 +92,8 @@ int			 save_tox(Tox*);
 int			 stdin_ready(void);
 int			 process_plist(Tox*, struct cons*);
 int			 process_stdin(Tox*);
+void			 add_bootstrap(const char*);
+int			 parse_testmode();
 __dead void		 usage(const char*, int);
 
 /* utf8.c */

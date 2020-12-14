@@ -17,6 +17,15 @@
  * - can output symbols but cannot parse 'em
  */
 
+#define NODES_LEN	255
+struct dht_node {
+	char	*host;
+	uint16_t port;
+	char	*pkey;
+} nodes [NODES_LEN];
+
+size_t nodes_len = 0;
+
 char *savepath, *savepath_tmp;
 
 
@@ -780,7 +789,9 @@ init_tox(void)
 	TOX_ERR_NEW err_new;
 	uint8_t *data;
 	FILE *f;
-	size_t fsize, r;
+	size_t fsize, r, i;
+	TOX_ERR_BOOTSTRAP err_boot;
+	char *errstr;
 
 	tox_options_default(&opts);
 	opts.ipv6_enabled = 0;
@@ -813,6 +824,34 @@ init_tox(void)
 
 	if (err_new != TOX_ERR_NEW_OK)
 		return NULL;
+
+	for (i = 0; i < nodes_len; ++i) {
+		tox_bootstrap(tox, nodes[i].host, nodes[i].port, nodes[i].pkey, &err_boot);
+		if (err_boot == TOX_ERR_BOOTSTRAP_OK)
+			continue;
+
+		switch (err_boot) {
+		case TOX_ERR_BOOTSTRAP_NULL:
+			errstr = "one of the args was nil";
+			break;
+		case TOX_ERR_BOOTSTRAP_BAD_HOST:
+			errstr = "bad host";
+			break;
+		case TOX_ERR_BOOTSTRAP_BAD_PORT:
+			errstr = "bad port";
+			break;
+		default:
+			errstr = "unknown error";
+			break;
+		}
+
+		PPP(MAKE_KEYWORD("@type"),	MAKE_KEYWORD("bootstrap"),
+		    MAKE_KEYWORD("@status"),	NULL,
+		    MAKE_KEYWORD("@err"),	MAKE_STRING(errstr),
+		    MAKE_KEYWORD("host"),	MAKE_STRING(nodes[i].host),
+		    MAKE_KEYWORD("port"),	MAKE_INTEGER(nodes[i].port),
+		    MAKE_KEYWORD("public-key"),	MAKE_STRING(nodes[i].pkey));
+	}
 
 	return tox;
 }
@@ -913,11 +952,46 @@ process_stdin(Tox *tox)
 	return r;
 }
 
-__dead void
-usage(const char *me, int s)
+void
+add_bootstrap(const char *b)
 {
-	fprintf(stderr, "USAGE: %s [-s savepath] [-T test-mode]\n", me);
-	exit(s);
+	struct cons *p;
+	struct atom *i;
+	char *host, *pk;
+	uint16_t port;
+
+	if ((p = read_plist(b)) == NULL)
+		errx(1, "invalid bootstrap plist: %s", b);
+
+	if (nodes_len == NODES_LEN)
+		errx(1, "more than %d nodes given", NODES_LEN);
+
+	if ((i = plist_get(p, &INIT_KEYWORD("host"))) == NULL)
+		errx(1, "missing :host in %s", b);
+	if (i->type != ASTR)
+		errx(1, ":host must be a string in %s", b);
+	if ((host = strdup(i->str)) == NULL)
+		err(1, "strdup");
+
+	if ((i = plist_get(p, &INIT_KEYWORD("port"))) == NULL)
+		errx(1, "missing :port in %s", b);
+	if (i->type != AINT)
+		errx(1, ":port must be an integer in %s", b);
+	port = i->integer;
+
+	if ((i = plist_get(p, &INIT_KEYWORD("public-key"))) == NULL)
+		errx(1, "missing :public-key in %s", b);
+	if (i->type != ASTR)
+		errx(1, ":public-key must be a string in %s", b);
+	if ((pk = strdup(i->str)) == NULL)
+		err(1, "strdup");
+
+	nodes[nodes_len].host = host;
+	nodes[nodes_len].port = port;
+	nodes[nodes_len].pkey = pk;
+	nodes_len++;
+
+	list_free(p);
 }
 
 int
@@ -937,6 +1011,13 @@ parse_testmode()
 	return 0;
 }
 
+__dead void
+usage(const char *me, int s)
+{
+	fprintf(stderr, "USAGE: %s [-B boostrap] [-s savepath] [-T test-mode]\n", me);
+	exit(s);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -948,8 +1029,12 @@ main(int argc, char **argv)
 	savepath_tmp = NULL;
 
 	tm = TEST_NONE;
-	while ((ch = getopt(argc, argv, "s:T:")) != -1) {
+	while ((ch = getopt(argc, argv, "B:s:T:")) != -1) {
 		switch (ch) {
+		case 'B':
+			add_bootstrap(optarg);
+			break;
+
 		case 's':
 			if ((savepath = strdup(optarg)) == NULL)
 				err(1, "strdup");
