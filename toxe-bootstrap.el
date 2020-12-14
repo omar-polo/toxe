@@ -10,9 +10,10 @@
 (defvar toxe-bootstrap-offline-timeout (* 60 60 24 2)
   "Number of seconds since last successful ping before we consider a node offline.")
 
-(defun toxe-bootstrap-fetch-list ()
-  "Fetch a list of known hosts that are part of tox network."
+(defun toxe-bootstrap-fetch-list (n)
+  "Fetch a list of N known hosts that are part of tox network."
   (let ((res (with-current-buffer (url-retrieve-synchronously toxe-bootstrap-url)
+               ;; there must be better way to parse an HTTP response
                (goto-char (point-min))
                (mark-paragraph)
                (exchange-point-and-mark)
@@ -21,7 +22,7 @@
                (json-parse-buffer))))
     (cl-loop with now = (/ (car (time-convert nil t)) 1000000000)
              for node being the elements of (gethash "nodes" res)
-             for i from 0 to 5          ;limit
+             for i from 0 to n
              when (< (- now (gethash "last_ping" node))
                      toxe-bootstrap-offline-timeout)
              collect (list (gethash "ipv4" node)
