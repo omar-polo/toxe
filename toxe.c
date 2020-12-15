@@ -592,11 +592,13 @@ hself_set_name(Tox *tox, struct cons *opts)
 	}
 
 	tox_self_set_name(tox, name, strlen(name), NULL);
-	PPP(MAKE_KEYWORD("@status"),	MAKE_SYMBOL("t"));
+	PPP(MAKE_KEYWORD("@type"),	MAKE_SYMBOL("self-set-name"),
+	    MAKE_KEYWORD("@status"),	MAKE_SYMBOL("t"));
 	return 1;
 
 err:
-	PPP(MAKE_KEYWORD("@status"),	NULL,
+	PPP(MAKE_KEYWORD("@type"),	MAKE_SYMBOL("self-set-name"),
+	    MAKE_KEYWORD("@status"),	NULL,
 	    MAKE_KEYWORD("@err"),	MAKE_STRING(errstr));
 	return 1;
 }
@@ -612,11 +614,13 @@ hself_set_status_msg(Tox *tox, struct cons *opts)
 	}
 
 	tox_self_set_status_message(tox, msg, strlen(msg), NULL);
-	PPP(MAKE_KEYWORD("@status"),	MAKE_SYMBOL("t"));
+	PPP(MAKE_KEYWORD("@type"),	MAKE_SYMBOL("self-set-status-message"),
+	    MAKE_KEYWORD("@status"),	MAKE_SYMBOL("t"));
 	return 1;
 
 err:
-	PPP(MAKE_KEYWORD("@status"),	NULL,
+	PPP(MAKE_KEYWORD("@type"),	MAKE_SYMBOL("self-set-status-message"),
+	    MAKE_KEYWORD("@status"),	NULL,
 	    MAKE_KEYWORD("@err"),	MAKE_STRING(errstr));
 	return 1;
 }
@@ -630,7 +634,8 @@ hself_get_addr(Tox *tox, struct cons *opts)
 	tox_self_get_address(tox, self);
 	bin2hex(self, sizeof(self), hex);
 
-	PPP(MAKE_KEYWORD("@status"),	MAKE_SYMBOL("t"),
+	PPP(MAKE_KEYWORD("@type"),	MAKE_SYMBOL("self-get-address"),
+	    MAKE_KEYWORD("@status"),	MAKE_SYMBOL("t"),
 	    MAKE_KEYWORD("address"),	MAKE_STRING(hex));
 	return 1;
 }
@@ -657,11 +662,13 @@ hfriend_add(Tox *tox, struct cons *opts)
 		goto err;
 	}
 
-	PPP(MAKE_KEYWORD("@status"),	MAKE_SYMBOL("t"));
+	PPP(MAKE_KEYWORD("@type"),	MAKE_SYMBOL("friend-add"),
+	    MAKE_KEYWORD("@status"),	MAKE_SYMBOL("t"));
 	return 1;
 
 err:
-	PPP(MAKE_KEYWORD("@status"),	NULL,
+	PPP(MAKE_KEYWORD("@type"),	MAKE_SYMBOL("friend-add"),
+	    MAKE_KEYWORD("@status"),	NULL,
 	    MAKE_KEYWORD("@err"),	MAKE_STRING(errstr));
 	return 1;
 }
@@ -695,11 +702,13 @@ hfriend_send_msg(Tox *tox, struct cons *opts)
 		goto err;
 	}
 
-	PPP(MAKE_KEYWORD("@status"),	MAKE_SYMBOL("t"));
+	PPP(MAKE_KEYWORD("@type"),	MAKE_SYMBOL("friend-send-message"),
+	    MAKE_KEYWORD("@status"),	MAKE_SYMBOL("t"));
 	return 1;
 
 err:
-	PPP(MAKE_KEYWORD("@status"),	NULL,
+	PPP(MAKE_KEYWORD("@type"),	MAKE_SYMBOL("friend-send-message"),
+	    MAKE_KEYWORD("@status"),	NULL,
 	    MAKE_KEYWORD("@err"),	MAKE_STRING(errstr));
 	return 1;
 }
@@ -784,7 +793,8 @@ err:
 int
 hquit(Tox *tox, struct cons *opts)
 {
-	PPP(MAKE_KEYWORD("@status"), MAKE_SYMBOL("t"));
+	PPP(MAKE_KEYWORD("@type"),	MAKE_SYMBOL("quit"),,
+	    MAKE_KEYWORD("@status"),	MAKE_SYMBOL("t"));
 	return 0;
 }
 
