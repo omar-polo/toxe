@@ -793,7 +793,7 @@ err:
 int
 hquit(Tox *tox, struct cons *opts)
 {
-	PPP(MAKE_KEYWORD("@type"),	MAKE_SYMBOL("quit"),,
+	PPP(MAKE_KEYWORD("@type"),	MAKE_SYMBOL("quit"),
 	    MAKE_KEYWORD("@status"),	MAKE_SYMBOL("t"));
 	return 0;
 }
