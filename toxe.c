@@ -340,7 +340,7 @@ read_atom(const char *line, struct cons **ret)
 }
 
 struct cons *
-read_plist(const char *line)
+read_list(const char *line)
 {
 	struct cons *ret = NULL;
 
@@ -964,11 +964,11 @@ process_stdin(Tox *tox)
 		return 0;
 	}
 
-	cmd = read_plist(line);
+	cmd = read_list(line);
 	free(line);
 
 	if (cmd == NULL) {
-		warnx("read_plist");
+		warnx("read_list");
 		return 0;
 	}
 
@@ -985,7 +985,7 @@ add_bootstrap(const char *b)
 	char *host, *pk;
 	uint16_t port;
 
-	if ((p = read_plist(b)) == NULL)
+	if ((p = read_list(b)) == NULL)
 		errx(1, "invalid bootstrap plist: %s", b);
 
 	if (nodes_len == NODES_LEN)
@@ -1029,7 +1029,7 @@ parse_testmode()
 
 	if ((linelen = getline(&line, &linesize, stdin)) == -1)
 		err(1, "getline");
-	cmd = read_plist(line);
+	cmd = read_list(line);
 	pp(cmd);
 	free(line);
 	list_free(cmd);

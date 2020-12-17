@@ -60,7 +60,7 @@ void			 pp(struct cons*);
 
 const char		*skip_blanks(const char*);
 const char		*read_atom(const char*, struct cons**);
-struct cons		*read_plist(const char*);
+struct cons 		*read_list(const char*);
 
 void			 bin2hex(const uint8_t*, size_t, char*);
 void			 hex2bin(const char*, size_t, uint8_t*);
