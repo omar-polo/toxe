@@ -69,9 +69,30 @@ status of the connection:
 (defvar toxe--connection-status 'none
   "The status of the connection.")
 
+(defvar toxe--self-address nil
+  "Our address.")
+
+(defvar toxe--contacts nil
+  "Holds the contact list.")
+
+(cl-defstruct toxe--friend
+  friend-number public-key last-seen status
+  name status-message conn-status)
+
 (defun toxe-connection-status ()
   "Return the status of the connection."
   toxe--connection-status)
+
+(defun toxe-self-address ()
+  "Return the address of the toxe instance."
+  toxe--self-address)
+
+(defun toxe--friend-by-number (number)
+  "Return the friend with the given NUMBER."
+  (cl-find-if (lambda (x)
+                (= number (toxe--friend-friend-number x)))
+              toxe--contacts))
+
 (defun toxe--make-process ()
   "Start toxe."
   (unless (process-live-p toxe--process)
@@ -125,12 +146,37 @@ PROC is toxe and STRING part of its output."
   (message "toxe: unhandled event %s with params %s" type params))
 
 (defmacro toxe--defhandler (type decls &rest body)
+  "Syntactical sugar over cl-defmethod.
+TYPE is the symbol of the handled method.  DECLS is the
+declaration, it's implicitly put as &key, so order doesn't
+matter.  BODY is the implementation."
   (declare (indent defun))
   (let ((typesym (gensym "_type")))
     `(cl-defmethod toxe--handle-event ((,typesym (eql ,type))
                                        &key ,@decls
                                        &allow-other-keys)
        ,@body)))
+
+(toxe--defhandler self-get-address (address)
+  (setq toxe--self-address address))
+
+(toxe--defhandler chatlist-start ()
+  (setq toxe--contacts nil))
+
+(toxe--defhandler chatlist-entry (friend-number public-key last-seen status
+                                                name status-message conn-status)
+  (push (make-toxe--friend :friend-number friend-number
+                           :public-key public-key
+                           :last-seen last-seen
+                           :status status
+                           :name name
+                           :status-message status-message
+                           :conn-status conn-status)
+        toxe--contacts))
+
+(toxe--defhandler chatlist-end (@status)
+  (unless @status
+    (error "toxe: chatlist-end failed")))
 
 (toxe--defhandler friend-request (public-key message)
   (message "toxe: friend-request from pk %s with message: %s"
@@ -143,6 +189,57 @@ PROC is toxe and STRING part of its output."
 (toxe--defhandler connection-status (connection-status)
   (setq toxe--connection-status connection-status)
   (message "toxe: connection status %s" connection-status))
+
+(toxe--defhandler friend-name (friend-number name)
+  (when-let (f (toxe--friend-by-number friend-number))
+    (setf (toxe--friend-name f) name)))
+
+(toxe--defhandler friend-status-message (friend-number message)
+  (when-let (f (toxe--friend-by-number friend-number))
+    (setf (toxe--friend-status-message f) message)))
+
+(toxe--defhandler friend-status (friend-number status)
+  (when-let (f (toxe--friend-by-number friend-number))
+    (setf (toxe--friend-status f) status)))
+
+(toxe--defhandler friend-connection-status (friend-number connection-status)
+  (when-let (f (toxe--friend-by-number friend-number))
+    (setf (toxe--friend-conn-status f) connection-status)))
+
+(defun toxe--send-request (req)
+  "Send REQ to the `toxe--process'."
+  (when (process-live-p toxe--process)
+    (process-send-string (process-buffer toxe--process)
+                         (with-output-to-string
+                           ;; XXX: toxe cannot parse symbols (yet).
+                           ;; Silently transform them into strings.
+                           (prin1 (mapcar (lambda (x)
+                                            (if (and (symbolp x)
+                                                     (not (keywordp x)))
+                                                (symbol-name x)
+                                              x))
+                                          req))
+                           (princ "\n")))))
+
+(defmacro toxe--defcmd (cmd args &optional doc)
+  (let ((s (intern (concat "toxe--cmd-" (symbol-name cmd)))))
+    `(defun ,s ,args
+       ,doc
+       (toxe--send-request
+        ,(cl-loop with c = (list 'list :@type (list 'quote cmd))
+                  for arg in args
+                  do (nconc c (list (intern (concat ":" (symbol-name arg)))
+                                    arg))
+                  finally (return c))))))
+
+(toxe--defcmd self-set-name (name)
+  "Set the name to NAME.")
+
+(toxe--defcmd self-set-status-message (message)
+  "Set the status message to MESSAGE.")
+
+(toxe--defcmd self-get-address ()
+  "Get our address.")
 
 (provide 'toxe)
 ;;; toxe.el ends here
