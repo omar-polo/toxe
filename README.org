@@ -1,0 +1,9 @@
+#+TITLE: toxe
+
+=toxe= is a [[https://tox.chat/][tox]] client for Emacs.
+
+** building
+   You need [[https://github.com/TokTok/c-toxcore][toxcore]] installed and a C compiler.  Running =make= will put a =toxe= executable in =$HOME/bin=.
+
+** usage
+   add =toxe.el= to your =load-path=.  Then, you can start =toxe= with =M-x toxe RET=.
