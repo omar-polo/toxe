@@ -8,6 +8,8 @@
 
 (require 'cl-lib)
 
+(eval-when-compile (require 'subr-x))
+
 
 ;;; vars
 
@@ -77,7 +79,8 @@ status of the connection:
 
 (cl-defstruct toxe--friend
   number public-key last-seen status
-  name status-message conn-status)
+  name status-message conn-status
+  buffer)
 
 (defun toxe-connection-status ()
   "Return the status of the connection."
@@ -117,7 +120,49 @@ status of the connection:
                           :sentinel (lambda (_proc s)
                                       (message "toxe: status %s" s)))))))
 
-(define-derived-mode toxe-mode special-mode "toxe")
+(define-derived-mode toxe-mode special-mode "toxe"
+  "Mode for the toxe main buffer.")
+
+(defvar toxe-current-friend nil
+  "Friend for the current tox-chat buffer.")
+
+(defvar toxe-prompt "> "
+  "Prompt for the chat buffer.")
+
+(define-derived-mode toxe-chat-mode text-mode "toxe-chat"
+  "Mode for the toxe chatbuf."
+  (make-local-variable 'toxe-current-friend)
+  (define-key toxe-chat-mode-map (kbd "RET") #'toxe-chat-send)
+  (let ((inhibit-read-only t))
+    (erase-buffer)
+    (insert toxe-prompt)
+    (put-text-property (point-min) (1- (point-max)) 'read-only t)))
+
+(defun toxe-chat--insert (from msg)
+  (save-excursion
+    (let* ((prompt (previous-property-change (point-max)))
+           (inhibit-read-only t)
+           (start))
+      (setq start (goto-char (1+ (- prompt (length toxe-prompt)))))
+      (insert from ": " msg "\n")
+      (put-text-property start (point) 'read-only t))))
+
+(defun toxe-chat-send ()
+  "Send the typed message or goto insertion point."
+  (interactive)
+  (if (not (= (point) (point-max)))
+      (insert "\n")
+    (let ((prompt (previous-property-change (point-max)))
+          (point  (point)))
+      (when (< prompt point)
+        (let* ((start (1+ prompt))
+               (end (point-max))
+               (msg (buffer-substring-no-properties start end)))
+          (delete-region start end)
+          (toxe-chat--insert (or toxe-user-name "me") msg)
+          (toxe--cmd-friend-send-message (toxe--friend-number toxe-current-friend)
+                                         'normal
+                                         msg))))))
 
 ;;;###autoload
 (defun toxe ()
@@ -130,9 +175,9 @@ status of the connection:
   (toxe-mode)
   (use-local-map widget-keymap)
   (widget-setup)
-  (toxe--draw-root-buffer))
+  (toxe--update-root-buffer))
 
-(defun toxe--draw-root-buffer ()
+(defun toxe--update-root-buffer ()
   "Draw/update the *toxe* buffer."
   (with-current-buffer "*toxe*"
     (let ((inhibit-read-only t))
@@ -142,14 +187,23 @@ status of the connection:
       (cl-loop for contact in toxe--contacts
                do (widget-create 'push-button
                                  :notify (lambda (&rest _ignore)
-                                           (toxe--switch-to-chat
-                                            (toxe--friend-number contact)))
+                                           (pop-to-buffer
+                                            (toxe--friend-getcreate-buffer contact)))
                                  (toxe--friend-name contact))
                do (widget-insert "\n")))))
 
-(defun toxe--switch-to-chat (_friend-number)
-  "Switch to the chat with the friend FRIEND-NUMBER."
-  (message "TODO"))
+(defun toxe--friend-getcreate-buffer (friend)
+  "Return the buffer with the chat with the given FRIEND."
+  (let ((buf (toxe--friend-buffer friend)))
+    (if (and buf (buffer-live-p buf))
+        buf
+      (setf (toxe--friend-buffer friend)
+            (let ((buf (get-buffer-create (format "*toxe-%s*"
+                                                  (toxe--friend-name friend)))))
+              (with-current-buffer buf
+                (toxe-chat-mode)
+                (setq toxe-current-friend friend))
+              buf)))))
 
 ;;;###autoload
 (defun toxe-kill ()
@@ -158,7 +212,12 @@ status of the connection:
   (when (process-live-p toxe--process)
     (toxe--cmd-quit)
     (kill-buffer (process-buffer toxe--process))
+    (dolist (c toxe--contacts)
+      (when-let (buf (toxe--friend-buffer c))
+        (kill-buffer buf)))
+    (kill-buffer "*toxe*")
     (setq toxe--process nil
+          toxe--contacts nil
           toxe--connection-status 'none)
     t))
 
@@ -221,7 +280,8 @@ matter.  BODY is the implementation."
 
 (toxe--defhandler chatlist-end (@status)
   (unless @status
-    (error "toxe: chatlist-end failed")))
+    (error "[toxe] chatlist-end failed"))
+  (toxe--update-root-buffer))
 
 (toxe--defhandler friend-request (public-key message)
   (message "toxe: friend-request from pk %s with message: %s"
@@ -230,7 +290,9 @@ matter.  BODY is the implementation."
   (run-hook-with-args toxe-friend-request-hook public-key message))
 
 (toxe--defhandler friend-message (friend-number message-type message)
-  (message "toxe: %s message from %s: %s" message-type friend-number message)
+  (when-let (f (toxe--friend-by-number friend-number))
+    (with-current-buffer (toxe--friend-getcreate-buffer f)
+      (toxe-chat--insert (toxe--friend-name f) message)))
   (run-hook-with-args toxe-friend-message-hook friend-number message-type message))
 
 (toxe--defhandler connection-status (connection-status)
@@ -258,16 +320,19 @@ matter.  BODY is the implementation."
   "Send REQ to the `toxe--process'."
   (when (process-live-p toxe--process)
     (process-send-string (process-buffer toxe--process)
-                         (with-output-to-string
-                           ;; XXX: toxe cannot parse symbols (yet).
-                           ;; Silently transform them into strings.
-                           (prin1 (mapcar (lambda (x)
-                                            (if (and (symbolp x)
-                                                     (not (keywordp x)))
-                                                (symbol-name x)
-                                              x))
-                                          req))
-                           (princ "\n")))))
+                         (concat
+                          (replace-regexp-in-string
+                           "\n" "\\\\n"
+                           (with-output-to-string
+                             ;; XXX: toxe cannot parse symbols (yet).
+                             ;; Silently transform them into strings.
+                             (prin1 (mapcar (lambda (x)
+                                              (if (and (symbolp x)
+                                                       (not (keywordp x)))
+                                                  (symbol-name x)
+                                                x))
+                                            req))))
+                          "\n"))))
 
 (defmacro toxe--defcmd (cmd args &optional documentation)
   "Define a function that invokes the toxe CMD with ARGS.
