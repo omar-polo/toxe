@@ -585,12 +585,11 @@ extract_name(struct cons *plist, char **ret)
 int
 hself_set_name(Tox *tox, struct cons *opts)
 {
-	char *name, *errstr;
+	char *name;
+	char *errstr = "name: wrong type or missing";
 
-	if (!extract_name(opts, &name)) {
-		errstr = "name: wrong type or missing";
+	if (!extract_name(opts, &name))
 		goto err;
-	}
 
 	tox_self_set_name(tox, name, strlen(name), NULL);
 	PPP(MAKE_KEYWORD("@type"),	MAKE_SYMBOL("self-set-name"),
@@ -607,12 +606,11 @@ err:
 int
 hself_set_status_msg(Tox *tox, struct cons *opts)
 {
-	char *msg, *errstr;
+	char *msg;
+	char *errstr = "message: wrong type or missing";
 
-	if (!extract_message(opts, &msg)) {
-		errstr = "message: wrong type or missing";
+	if (!extract_message(opts, &msg))
 		goto err;
-	}
 
 	tox_self_set_status_message(tox, msg, strlen(msg), NULL);
 	PPP(MAKE_KEYWORD("@type"),	MAKE_SYMBOL("self-set-status-message"),
