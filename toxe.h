@@ -49,6 +49,7 @@ struct atom		*make_integer(int64_t);
 struct cons		*cons(struct atom*, struct cons*);
 void			 list_free(struct cons*);
 struct cons		*append(struct cons*, struct cons*);
+struct cons		*push_back(struct cons*, struct atom*);
 struct atom		*car(struct cons*);
 struct cons		*cdr(struct cons*);
 int			 eq(const struct atom*restrict, const struct atom*restrict);
@@ -58,6 +59,7 @@ void			 pp_atom(struct atom*);
 void			 pp(struct cons*);
 
 const char		*skip_blanks(const char*);
+const char		*read_atom(const char*, struct cons**);
 struct cons		*read_plist(const char*);
 
 void			 bin2hex(const uint8_t*, size_t, char*);

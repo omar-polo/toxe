@@ -144,6 +144,12 @@ append(struct cons *a, struct cons *b)
 	return s;
 }
 
+struct cons *
+push_back(struct cons *l, struct atom *a)
+{
+	return append(l, cons(a, NULL));
+}
+
 struct atom *
 car(struct cons *c)
 {
@@ -273,29 +279,48 @@ skip_blanks(const char *c)
 	return c;
 }
 
-struct cons *
-read_plist(const char *line)
+const char *
+read_atom(const char *line, struct cons **ret)
 {
-#define ASSERT_KEYWORD	if (*line != ':') goto err
-#define ASSERT_STRING	if (*line != '\"' || *line == ')') goto err
-
-	enum {IN_KEY, IN_NUM, IN_STR} state = IN_KEY;
-	int esc = 0;
-	int64_t num;
+	int type, esc = 0;
+	int64_t n;
 	const char *s;
-	struct cons *ret;
 
-	ret = NULL;
-	line = skip_blanks(line);
-	if (*line != '(')
-		return 0;
-        line = skip_blanks(line+1);
-	ASSERT_KEYWORD;
-	s = line;
+	switch (*line) {
+	case ')': return line;
+	case ':': type = AKEY; break;
+	case '"': type = ASTR; break;
+	default:
+		if (isdigit(*line)) {
+			type = AINT;
+			n = *line - '0';
+		} else
+			type = ASYM;
+	}
 
-	for (s = line + 1; *line; line++) {
-		switch (state) {
-		case IN_STR:
+	s = line + 1;
+	if (type == ASYM)
+		s = line;
+
+	for (line++; *line; line++) {
+		switch (type) {
+		case AKEY:
+		case ASYM:
+			if (isspace(*line) || *line == ')') {
+				*ret = push_back(*ret, make_strkey(s, line-s, type));
+				return line;
+			}
+			break;
+
+		case AINT:
+			if (!isdigit(*line)) {
+				*ret = push_back(*ret, make_integer(n));
+				return line;
+			}
+			n = n*10 + (*line - '0');
+			break;
+
+		case ASTR:
 			if (esc) {
 				esc = 0;
 				continue;
@@ -305,56 +330,37 @@ read_plist(const char *line)
 				continue;
 			}
 			if (*line == '"') {
-				ret = append(ret, cons(make_strkey(s, line-s, ASTR), NULL));
-				line = skip_blanks(line+1);
-				if (*line == ')')
-					return ret; /* done */
-				ASSERT_KEYWORD;
-				s = line+1; /* skip : */
-				state = IN_KEY;
+				*ret = push_back(*ret, make_strkey(s, line-s, type));
+				return line+1;
 			}
-			break;
-
-		case IN_NUM:
-			if (!isdigit(*line)) {
-				ret = append(ret, cons(make_integer(num), NULL));
-				line = skip_blanks(line);
-
-				if (*line == ')')
-					return ret; /* done */
-
-				ASSERT_KEYWORD;
-				s = ++line;
-				state = IN_KEY;
-				continue;
-			}
-			num = num * 10 + *line - '0';
-			break;
-
-		case IN_KEY:
-			if (isspace(*line)) {
-				ret = append(ret, cons(make_strkey(s, line-s, AKEY), NULL));
-				line = skip_blanks(line+1);
-				if (isdigit(*line)) {
-					state = IN_NUM;
-					num = *line - '0';
-				} else {
-					ASSERT_STRING;
-					s = line+1;
-					state = IN_STR;
-				}
-			}
-			break;
 		}
 	}
 
 	return NULL;
-err:
-	list_free(ret);
-	return NULL;
+}
 
-#undef ASSERT_STRING
-#undef ASSERT_KEYWORD
+struct cons *
+read_plist(const char *line)
+{
+	struct cons *ret = NULL;
+
+	line = skip_blanks(line);
+	if (*line != '(')
+		return 0;
+
+        for (line++; *line != ')' && *line != '\0'; line = skip_blanks(line)) {
+		if ((line = read_atom(line, &ret)) == NULL) {
+			list_free(ret);
+			return NULL;
+		}
+	}
+
+	if (*line == '\0') {
+		list_free(ret);
+		return NULL;
+	}
+
+	return ret;
 }
 
 

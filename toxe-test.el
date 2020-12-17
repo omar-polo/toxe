@@ -24,7 +24,10 @@ what will be fed to toxe' standard input."
 (ert-deftest toxe-can-parse-plists-test ()
   (cl-loop for test in '((:@type 55)
                          (:@type "foobar")
-                         (:@type 55 :message "gnegne"))
+                         (:@type 55 :message "gnegne")
+                         (:@type friend-message :friend-number 7)
+                         (foo "bar" 77 "baz")
+                         (foo))
            do (let ((got (toxe-test-send-plist test)))
                 (should (equal test got)))))
 
