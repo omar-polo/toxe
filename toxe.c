@@ -13,11 +13,6 @@
 
 #include "toxe.h"
 
-/*
- * CAVEATS:
- * - can output symbols but cannot parse 'em
- */
-
 #define NODES_LEN	255
 struct dht_node {
 	char	*host;
@@ -541,12 +536,12 @@ extract_message_type(struct cons *plist, TOX_MESSAGE_TYPE *ret)
 
 	if ((i = plist_get(plist, &INIT_KEYWORD("message-type"))) == NULL)
 		return 0;
-	if (i->type != ASTR)
+	if (i->type != ASYM)
 		return 0;
 
-	if (eq(i, &INIT_STRING("normal")))
+	if (eq(i, &INIT_SYMBOL("normal")))
 		*ret = TOX_MESSAGE_TYPE_NORMAL;
-	else if (eq(i, &INIT_STRING("action")))
+	else if (eq(i, &INIT_SYMBOL("action")))
 		*ret = TOX_MESSAGE_TYPE_ACTION;
 	else
 		return 0;
@@ -926,14 +921,14 @@ process_plist(Tox *tox, struct cons *cmd)
 		struct atom type;
 		int (*fn)(Tox*, struct cons *cmd);
 	} handlers[] = {
-		{INIT_STRING("self-set-name"),			hself_set_name},
-		{INIT_STRING("self-set-status-message"),	hself_set_status_msg},
-		{INIT_STRING("self-get-address"),		hself_get_addr},
-		{INIT_STRING("friend-add"),			hfriend_add},
-		{INIT_STRING("friend-send-message"),		hfriend_send_msg},
-		{INIT_STRING("get-chatlist"),			hget_chatlist},
-		{INIT_STRING("quit"),				hquit},
-		{INIT_STRING(""),				NULL},
+		{INIT_SYMBOL("self-set-name"),			hself_set_name},
+		{INIT_SYMBOL("self-set-status-message"),	hself_set_status_msg},
+		{INIT_SYMBOL("self-get-address"),		hself_get_addr},
+		{INIT_SYMBOL("friend-add"),			hfriend_add},
+		{INIT_SYMBOL("friend-send-message"),		hfriend_send_msg},
+		{INIT_SYMBOL("get-chatlist"),			hget_chatlist},
+		{INIT_SYMBOL("quit"),				hquit},
+		{INIT_SYMBOL(""),				NULL},
 	}, *h;
 
 	if ((at_type = plist_get(cmd, &INIT_KEYWORD("@type"))) == NULL) {

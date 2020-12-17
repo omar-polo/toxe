@@ -324,14 +324,7 @@ matter.  BODY is the implementation."
                           (replace-regexp-in-string
                            "\n" "\\\\n"
                            (with-output-to-string
-                             ;; XXX: toxe cannot parse symbols (yet).
-                             ;; Silently transform them into strings.
-                             (prin1 (mapcar (lambda (x)
-                                              (if (and (symbolp x)
-                                                       (not (keywordp x)))
-                                                  (symbol-name x)
-                                                x))
-                                            req))))
+                             (prin1 req)))
                           "\n"))))
 
 (defmacro toxe--defcmd (cmd args &optional documentation)
