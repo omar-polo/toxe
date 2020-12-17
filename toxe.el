@@ -76,7 +76,7 @@ status of the connection:
   "Holds the contact list.")
 
 (cl-defstruct toxe--friend
-  friend-number public-key last-seen status
+  number public-key last-seen status
   name status-message conn-status)
 
 (defun toxe-connection-status ()
@@ -90,11 +90,11 @@ status of the connection:
 (defun toxe--friend-by-number (number)
   "Return the friend with the given NUMBER."
   (cl-find-if (lambda (x)
-                (= number (toxe--friend-friend-number x)))
+                (= number (toxe--friend-number x)))
               toxe--contacts))
 
 (defun toxe--make-process ()
-  "Start toxe."
+  "Make the toxe process."
   (unless (process-live-p toxe--process)
     (let (cmd)
       (when toxe-savedata-dir
@@ -116,6 +116,25 @@ status of the connection:
                           :filter #'toxe--proc-filter
                           :sentinel (lambda (_proc s)
                                       (message "toxe: status %s" s)))))))
+
+;;;###autoload
+(defun toxe ()
+  "Start toxe."
+  (interactive)
+  (unless (process-live-p toxe--process)
+    (toxe--make-process)
+    (toxe--cmd-get-chatlist)))
+
+;;;###autoload
+(defun toxe-kill ()
+  "Closes toxe."
+  (interactive)
+  (when (process-live-p toxe--process)
+    (toxe--cmd-quit)
+    (kill-buffer (process-buffer toxe--process))
+    (setq toxe--process nil
+          toxe--connection-status 'none)
+    t))
 
 (defun toxe--proc-filter (proc string)
   "Filter for toxe process.
@@ -165,7 +184,7 @@ matter.  BODY is the implementation."
 
 (toxe--defhandler chatlist-entry (friend-number public-key last-seen status
                                                 name status-message conn-status)
-  (push (make-toxe--friend :friend-number friend-number
+  (push (make-toxe--friend :number friend-number
                            :public-key public-key
                            :last-seen last-seen
                            :status status
@@ -181,14 +200,17 @@ matter.  BODY is the implementation."
 (toxe--defhandler friend-request (public-key message)
   (message "toxe: friend-request from pk %s with message: %s"
            public-key
-           message))
+           message)
+  (run-hook-with-args toxe-friend-request-hook public-key message))
 
 (toxe--defhandler friend-message (friend-number message-type message)
-  (message "toxe: %s message from %s: %s" message-type friend-number message))
+  (message "toxe: %s message from %s: %s" message-type friend-number message)
+  (run-hook-with-args toxe-friend-message-hook friend-number message-type message))
 
 (toxe--defhandler connection-status (connection-status)
   (setq toxe--connection-status connection-status)
-  (message "toxe: connection status %s" connection-status))
+  (message "toxe: connection status %s" connection-status)
+  (run-hook-with-args toxe-self-connection-status-hook connection-status))
 
 (toxe--defhandler friend-name (friend-number name)
   (when-let (f (toxe--friend-by-number friend-number))
@@ -221,14 +243,20 @@ matter.  BODY is the implementation."
                                           req))
                            (princ "\n")))))
 
-(defmacro toxe--defcmd (cmd args &optional doc)
+(defmacro toxe--defcmd (cmd args &optional documentation)
+  "Define a function that invokes the toxe CMD with ARGS.
+Every method should have a DOCUMENTATION."
+  (declare (indent defun))
   (let ((s (intern (concat "toxe--cmd-" (symbol-name cmd)))))
     `(defun ,s ,args
-       ,doc
+       ,documentation
        (toxe--send-request
         ,(cl-loop with c = (list 'list :@type (list 'quote cmd))
                   for arg in args
-                  do (nconc c (list (intern (concat ":" (symbol-name arg)))
+                  do (nconc c (list (intern (concat ":" (symbol-name
+                                                         (if (consp arg)
+                                                             (car arg)
+                                                           arg))))
                                     arg))
                   finally (return c))))))
 
@@ -240,6 +268,24 @@ matter.  BODY is the implementation."
 
 (toxe--defcmd self-get-address ()
   "Get our address.")
+
+;; (toxe--defcmd friend-add (public-key &optional message)
+;;   "Send a friend request with MESSAGE to the user identified by PUBLIC-KEY.")
+(defun toxe--cmd-friend-add (public-key &optional message)
+  "Send a friend request with MESSAGE to the user identified by PUBLIC-KEY."
+  (toxe--send-request (list* :@type 'friend-add
+                             :public-key public-key
+                             (when message
+                               (list :message message)))))
+
+(toxe--defcmd friend-send-message (friend-number message-type message)
+  "Send MESSAGE with the given type to the friend with FRIEND-NUMBER.")
+
+(toxe--defcmd get-chatlist ()
+  "Retrieve the list of contacts.")
+
+(toxe--defcmd quit ()
+  "Quit toxe.")
 
 (provide 'toxe)
 ;;; toxe.el ends here
