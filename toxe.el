@@ -117,13 +117,39 @@ status of the connection:
                           :sentinel (lambda (_proc s)
                                       (message "toxe: status %s" s)))))))
 
+(define-derived-mode toxe-mode special-mode "toxe")
+
 ;;;###autoload
 (defun toxe ()
   "Start toxe."
   (interactive)
   (unless (process-live-p toxe--process)
     (toxe--make-process)
-    (toxe--cmd-get-chatlist)))
+    (toxe--cmd-get-chatlist))
+  (pop-to-buffer "*toxe*")
+  (toxe-mode)
+  (use-local-map widget-keymap)
+  (widget-setup)
+  (toxe--draw-root-buffer))
+
+(defun toxe--draw-root-buffer ()
+  "Draw/update the *toxe* buffer."
+  (with-current-buffer "*toxe*"
+    (let ((inhibit-read-only t))
+      (erase-buffer)
+      (remove-overlays)
+      (widget-insert "TOXE\n\n")
+      (cl-loop for contact in toxe--contacts
+               do (widget-create 'push-button
+                                 :notify (lambda (&rest _ignore)
+                                           (toxe--switch-to-chat
+                                            (toxe--friend-number contact)))
+                                 (toxe--friend-name contact))
+               do (widget-insert "\n")))))
+
+(defun toxe--switch-to-chat (_friend-number)
+  "Switch to the chat with the friend FRIEND-NUMBER."
+  (message "TODO"))
 
 ;;;###autoload
 (defun toxe-kill ()
