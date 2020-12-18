@@ -357,10 +357,10 @@ Every method should have a DOCUMENTATION."
 ;;   "Send a friend request with MESSAGE to the user identified by PUBLIC-KEY.")
 (defun toxe--cmd-friend-add (public-key &optional message)
   "Send a friend request with MESSAGE to the user identified by PUBLIC-KEY."
-  (toxe--send-request (list* :@type 'friend-add
-                             :public-key public-key
-                             (when message
-                               (list :message message)))))
+  (toxe--send-request (cl-list* :@type 'friend-add
+                                :public-key public-key
+                                (when message
+                                  (list :message message)))))
 
 (toxe--defcmd friend-send-message (friend-number message-type message)
   "Send MESSAGE with the given type to the friend with FRIEND-NUMBER.")
