@@ -6,9 +6,10 @@
 
 ;;; Code:
 
-(require 'cl-lib)
-
 (eval-when-compile (require 'subr-x))
+
+(require 'cl-lib)
+(require 'ewoc)
 
 
 ;;; vars
@@ -123,46 +124,51 @@ status of the connection:
 (define-derived-mode toxe-mode special-mode "toxe"
   "Mode for the toxe main buffer.")
 
-(defvar toxe-current-friend nil
+(defvar-local toxe-current-friend nil
   "Friend for the current tox-chat buffer.")
 
-(defvar toxe-prompt "> "
-  "Prompt for the chat buffer.")
+(defvar-local toxe-current-chat-messages nil
+  "List of messages in the current toxe chat buffer.")
 
-(define-derived-mode toxe-chat-mode text-mode "toxe-chat"
-  "Mode for the toxe chatbuf."
-  (make-local-variable 'toxe-current-friend)
-  (define-key toxe-chat-mode-map (kbd "RET") #'toxe-chat-send)
-  (let ((inhibit-read-only t))
-    (erase-buffer)
-    (insert toxe-prompt)
-    (put-text-property (point-min) (1- (point-max)) 'read-only t)))
+(defvar-local toxe-chat-ewoc nil)
+
+(defvar toxe-chat-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "RET") #'toxe-chat-send)
+    map)
+  "Keymap for toxe chat buffers.")
+
+(defun toxe-chat-ewoc-pp (data)
+  "Pretty print DATA (for EWOC)."
+  (cl-destructuring-bind (from msg) data
+    (insert from ":\t" msg)))
+
+(define-derived-mode toxe-chat-mode special-mode "toxe-chat"
+  "mode for the toxe chatbuf."
+  (erase-buffer)
+  (buffer-disable-undo)
+  (setq toxe-chat-ewoc
+        (ewoc-create #'toxe-chat-ewoc-pp
+                     (format "Chat with %s\n\n"
+                             "someone"))))
 
 (defun toxe-chat--insert (from msg)
-  (save-excursion
-    (let* ((prompt (previous-property-change (point-max)))
-           (inhibit-read-only t)
-           (start))
-      (setq start (goto-char (1+ (- prompt (length toxe-prompt)))))
-      (insert from ": " msg "\n")
-      (put-text-property start (point) 'read-only t))))
+  "Insert the message MSG from the user FROM."
+  (let ((datum `(,from ,msg)))
+    (setq toxe-current-chat-messages
+          (vconcat toxe-current-chat-messages datum))
+    (ewoc-enter-last toxe-chat-ewoc datum)
+    (ewoc-invalidate toxe-chat-ewoc (ewoc-nth toxe-chat-ewoc -1))
+    (goto-char (point-max))))
 
 (defun toxe-chat-send ()
   "Send the typed message or goto insertion point."
   (interactive)
-  (if (not (= (point) (point-max)))
-      (insert "\n")
-    (let ((prompt (previous-property-change (point-max)))
-          (point  (point)))
-      (when (< prompt point)
-        (let* ((start (1+ prompt))
-               (end (point-max))
-               (msg (buffer-substring-no-properties start end)))
-          (delete-region start end)
-          (toxe-chat--insert (or toxe-user-name "me") msg)
-          (toxe--cmd-friend-send-message (toxe--friend-number toxe-current-friend)
-                                         'normal
-                                         msg))))))
+  (when-let (msg (read-string "Message: "))
+    (toxe-chat--insert (or toxe-user-name "me") msg)
+    (toxe--cmd-friend-send-message (toxe--friend-number toxe-current-friend)
+                                   'normal
+                                   msg)))
 
 ;;;###autoload
 (defun toxe ()
@@ -250,7 +256,7 @@ PROC is toxe and STRING part of its output."
   (message "toxe: unhandled event %s with params %s" type params))
 
 (defmacro toxe--defhandler (type decls &rest body)
-  "Syntactical sugar over cl-defmethod.
+  "Syntactical sugar over `cl-defmethod'.
 TYPE is the symbol of the handled method.  DECLS is the
 declaration, it's implicitly put as &key, so order doesn't
 matter.  BODY is the implementation."
