@@ -16,7 +16,7 @@ TAGS: *.c
 clean:
 	rm -f toxe *.o *.elc TAGS
 
-compile: toxe.elc toxe-test.elc
+compile: toxe-chat.elc toxe-test.elc toxe.elc
 
 install: toxe
 	cp toxe ~/bin/toxe

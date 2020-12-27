@@ -32,8 +32,7 @@
 (eval-when-compile (require 'subr-x))
 
 (require 'cl-lib)
-(require 'ewoc)
-(require 'iimage)
+(require 'toxe-chat)
 
 
 ;;; vars
@@ -148,53 +147,6 @@ status of the connection:
 (define-derived-mode toxe-mode special-mode "toxe"
   "Mode for the toxe main buffer.")
 
-(defvar-local toxe-current-friend nil
-  "Friend for the current tox-chat buffer.")
-
-(defvar-local toxe-current-chat-messages nil
-  "List of messages in the current toxe chat buffer.")
-
-(defvar-local toxe-chat-ewoc nil)
-
-(defvar toxe-chat-mode-map
-  (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "RET") #'toxe-chat-send)
-    map)
-  "Keymap for toxe chat buffers.")
-
-(defun toxe-chat-ewoc-pp (data)
-  "Pretty print DATA (for EWOC)."
-  (cl-destructuring-bind (from msg) data
-    (insert from ":\t" msg)))
-
-(define-derived-mode toxe-chat-mode special-mode "toxe-chat"
-  "mode for the toxe chatbuf."
-  (erase-buffer)
-  (buffer-disable-undo)
-  (iimage-mode +1)
-  (setq toxe-chat-ewoc
-        (ewoc-create #'toxe-chat-ewoc-pp
-                     (format "Chat with %s\n\n"
-                             "someone"))))
-
-(defun toxe-chat--insert (from msg)
-  "Insert the message MSG from the user FROM."
-  (let ((datum `(,from ,msg)))
-    (setq toxe-current-chat-messages
-          (vconcat toxe-current-chat-messages datum))
-    (ewoc-enter-last toxe-chat-ewoc datum)
-    (ewoc-invalidate toxe-chat-ewoc (ewoc-nth toxe-chat-ewoc -1))
-    (goto-char (point-max))))
-
-(defun toxe-chat-send ()
-  "Send the typed message or goto insertion point."
-  (interactive)
-  (when-let (msg (read-string "Message: "))
-    (toxe-chat--insert (or toxe-user-name "me") msg)
-    (toxe--cmd-friend-send-message (toxe--friend-number toxe-current-friend)
-                                   'normal
-                                   msg)))
-
 ;;;###autoload
 (defun toxe ()
   "Start toxe."
@@ -233,7 +185,7 @@ status of the connection:
                                                   (toxe--friend-name friend)))))
               (with-current-buffer buf
                 (toxe-chat-mode)
-                (setq toxe-current-friend friend))
+                (setq toxe-chat-friend friend))
               buf)))))
 
 ;;;###autoload
