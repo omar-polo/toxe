@@ -21,6 +21,7 @@ compile: toxe-chat.elc toxe-test.elc toxe.elc
 install: toxe
 	cp toxe ~/bin/toxe
 
+toxe.elc: toxe-chat.elc
 toxe-test.elc: toxe.elc
 
 test: toxe-test.elc
