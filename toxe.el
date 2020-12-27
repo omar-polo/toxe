@@ -10,6 +10,7 @@
 
 (require 'cl-lib)
 (require 'ewoc)
+(require 'iimage)
 
 
 ;;; vars
@@ -147,6 +148,7 @@ status of the connection:
   "mode for the toxe chatbuf."
   (erase-buffer)
   (buffer-disable-undo)
+  (iimage-mode +1)
   (setq toxe-chat-ewoc
         (ewoc-create #'toxe-chat-ewoc-pp
                      (format "Chat with %s\n\n"
