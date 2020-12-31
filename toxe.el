@@ -81,10 +81,10 @@ string.")
 The functions will get called with a symbol representing the
 status of the connection:
 
- - toxe-connection-none    :: offline
- - toxe-connection-tcp     :: online (tcp)
- - toxe-connection-udp     :: online (udp)
- - toxe-connection-unknown :: unknown")
+ - none    (offline)
+ - tcp     (online on a tcp connection)
+ - udp     (online on a udp connection)
+ - unknown (unknown connection status)")
 
 
 ;;; implementation
