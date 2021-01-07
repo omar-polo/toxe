@@ -691,7 +691,7 @@ err:
 int
 hfriend_send_msg(Tox *tox, struct cons *opts)
 {
-	uint32_t fnum;
+	uint32_t fnum, msgid;
 	char *msg, *errstr;
 	TOX_MESSAGE_TYPE t;
 	TOX_ERR_FRIEND_SEND_MESSAGE err;
@@ -711,14 +711,16 @@ hfriend_send_msg(Tox *tox, struct cons *opts)
 		goto err;
 	}
 
-	tox_friend_send_message(tox, fnum, t, msg, strlen(msg), &err);
+	msgid = tox_friend_send_message(tox, fnum, t, msg, strlen(msg), &err);
 	if (err != TOX_ERR_FRIEND_SEND_MESSAGE_OK) {
 		errstr = "failure to send the message";
 		goto err;
 	}
 
-	PPP(MAKE_KEYWORD("@type"),	MAKE_SYMBOL("friend-send-message"),
-	    MAKE_KEYWORD("@status"),	MAKE_SYMBOL("t"));
+	PPP(MAKE_KEYWORD("@type"),		MAKE_SYMBOL("friend-send-message"),
+	    MAKE_KEYWORD("friend-number"),	MAKE_INTEGER(fnum),
+	    MAKE_KEYWORD("message-id"),		MAKE_INTEGER(msgid),
+	    MAKE_KEYWORD("@status"),		MAKE_SYMBOL("t"));
 	return 1;
 
 err:
