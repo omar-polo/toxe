@@ -92,6 +92,7 @@ void			 handle_friend_name(Tox*, uint32_t, const uint8_t*, size_t, void*);
 void			 handle_friend_status_message(Tox*, uint32_t, const uint8_t*, size_t, void*);
 void			 handle_friend_status(Tox*, uint32_t, TOX_USER_STATUS, void*);
 void			 handle_friend_connection_status(Tox*, uint32_t, TOX_CONNECTION, void*);
+void			 handle_friend_read_receipt(Tox*, uint32_t, uint32_t, void*);
 
 int			 extract_friend_number(struct cons*, uint32_t*);
 int			 extract_message(struct cons*, char**);

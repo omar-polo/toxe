@@ -509,6 +509,15 @@ handle_friend_connection_status(Tox *tox, uint32_t fnum, TOX_CONNECTION c,
 	    MAKE_KEYWORD("connection-status"),	convert_connection(c));
 }
 
+void
+handle_friend_read_receipt(Tox *tox, uint32_t fnum, uint32_t msgid,
+    void *udata)
+{
+	PPP(MAKE_KEYWORD("@type"),		MAKE_SYMBOL("friend-read-receipt"),
+	    MAKE_KEYWORD("friend-number"),	MAKE_INTEGER(fnum),
+	    MAKE_KEYWORD("message-id"),		MAKE_INTEGER(msgid));
+}
+
 
 
 int
@@ -1112,6 +1121,7 @@ main(int argc, char **argv)
 	tox_callback_friend_status_message(tox, handle_friend_status_message);
 	tox_callback_friend_status(tox, handle_friend_status);
 	tox_callback_friend_connection_status(tox, handle_friend_connection_status);
+	tox_callback_friend_read_receipt(tox, handle_friend_read_receipt);
 
 	if (!save_tox(tox))
 		errx(1, "cannot save tox");
