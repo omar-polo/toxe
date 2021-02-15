@@ -1056,8 +1056,9 @@ parse_testmode()
 	return 0;
 }
 
-__dead void
+void
 usage(const char *me, int s)
+	__attribute__((__noreturn__))
 {
 	fprintf(stderr, "USAGE: %s [-B boostrap] [-s savepath] [-T test-mode]\n", me);
 	exit(s);

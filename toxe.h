@@ -115,7 +115,8 @@ int			 process_plist(Tox*, struct cons*);
 int			 process_stdin(Tox*);
 void			 add_bootstrap(const char*);
 int			 parse_testmode();
-__dead void		 usage(const char*, int);
+void			 usage(const char*, int)
+	__attribute__((__noreturn__));
 
 /* utf8.c */
 
