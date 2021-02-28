@@ -35,6 +35,8 @@
 (declare-function toxe--friend-number "toxe" (friend))
 (declare-function toxe--friend-name   "toxe" (friend))
 
+(declare-function make-toxe--message "toxe")
+
 (defvar-local toxe-chat-friend nil
   "Friend for the current tox-chat buffer.")
 
