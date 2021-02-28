@@ -22,6 +22,7 @@
 
 ;;; Code:
 
+(require 'cl-lib)
 (require 'ewoc)
 
 ;; iimage for inline images?
@@ -43,6 +44,11 @@
 (defvar-local toxe-chat-ewoc nil
   "EWOC data for the current toxe chatbuf.")
 
+(defun toxe-chat--ewoc-pp (data)
+  "Pretty print DATA (for EWOC)."
+  (cl-destructuring-bind (from msg) data
+    (insert from ":\t" msg)))
+
 (defvar toxe-chat-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "RET") #'toxe-chat-send)
@@ -50,20 +56,17 @@
     map)
   "Keymap for toxe chat buffers.")
 
-(defun toxe-chat-ewoc-pp (data)
-  "Pretty print DATA (for EWOC)."
-  (cl-destructuring-bind (from msg) data
-    (insert from ":\t" msg)))
+(defvar toxe-chat--pass-friend nil)
 
 (define-derived-mode toxe-chat-mode special-mode "toxe-chat"
   "mode for the toxe chatbuf."
   (erase-buffer)
   (buffer-disable-undo)
-  (setq toxe-chat-ewoc
-        (ewoc-create #'toxe-chat-ewoc-pp
+  (setq toxe-chat-friend toxe-chat--pass-friend
+        toxe-chat-ewoc
+        (ewoc-create #'toxe-chat--ewoc-pp
                      (format "Chat with %s\n\n"
-                             ;; (toxe--friend-name toxe-chat-friend)
-                             "someone"))))
+                             (toxe--friend-name toxe-chat-friend)))))
 
 (defun toxe-chat--insert (from msg)
   "Insert the message MSG from the user FROM."
