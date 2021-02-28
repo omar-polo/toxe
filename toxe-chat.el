@@ -62,7 +62,7 @@ the bindings set."
 (defun toxe-chat--ewoc-pp (msg)
   "Pretty print MSG (for EWOC)."
   (toxe-with-accessors ((from from)
-                        (text tex))
+                        (text text))
       'toxe--message msg
     (insert from ":\t" text)))
 
@@ -91,7 +91,7 @@ the bindings set."
                                    :type type
                                    :text msg)))
     (setq toxe-chat-messages
-          (vconcat toxe-chat-messages datum))
+          (vconcat toxe-chat-messages (list datum)))
     (ewoc-enter-last toxe-chat-ewoc datum)
     (ewoc-invalidate toxe-chat-ewoc (ewoc-nth toxe-chat-ewoc -1))
     (goto-char (point-max))))
