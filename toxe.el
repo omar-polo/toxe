@@ -147,6 +147,9 @@ status of the connection:
 (define-derived-mode toxe-mode special-mode "toxe"
   "Mode for the toxe main buffer.")
 
+(defvar toxe--pending-friend-requests nil
+  "List of pending friend requests.")
+
 ;;;###autoload
 (defun toxe ()
   "Start toxe."
@@ -160,20 +163,52 @@ status of the connection:
   (widget-setup)
   (toxe--update-root-buffer))
 
+(defvar toxe-ascii-art "
+ooooooooooooo
+8'   888   `8
+     888    .ooooo.  oooo    ooo  .ooooo.
+     888   d88' `88b  `88b..8P'  d88' `88b
+     888   888   888    Y888'    888ooo888
+     888   888   888  .o8\"'88b   888    .o
+    o888o  `Y8bod8P' o88'   888o `Y8bod8P'"
+  "The ASCII art for the banner.")
+
 (defun toxe--update-root-buffer ()
   "Draw/update the *toxe* buffer."
   (with-current-buffer "*toxe*"
     (let ((inhibit-read-only t))
       (erase-buffer)
       (remove-overlays)
-      (widget-insert "TOXE\n\n")
+      (widget-insert toxe-ascii-art "\n\n")
+      (widget-insert "Your address: " (propertize toxe--self-address 'face 'font-lock-constant-face) "\n\n")
+      (widget-insert "Chats:\n\n")
       (cl-loop for contact in toxe--contacts
+               do (widget-insert "* ")
                do (widget-create 'push-button
                                  :notify (lambda (&rest _ignore)
                                            (pop-to-buffer
                                             (toxe--friend-getcreate-buffer contact)))
                                  (toxe--friend-name contact))
-               do (widget-insert "\n")))))
+               do (widget-insert "\n"))
+      (when toxe--pending-friend-requests
+        (widget-insert "\n\nPending friend requests:\n\n")
+        (cl-loop for (key message) in toxe--pending-friend-requests
+                 do (widget-insert "* ")
+                 do (widget-create 'push-button
+                                   :notify (lambda (&rest _ignore)
+                                             (message "deleting" key "from the list")
+                                             (setq toxe--pending-friend-requests
+                                                   (cl-delete-if (lambda (r)
+                                                                   (string= (car r) key))
+                                                                 toxe--pending-friend-requests))
+                                             (toxe--cmd-friend-add key)
+                                             (toxe--cmd-get-chatlist))
+                                   "Accept")
+                 do (widget-insert " "
+                                   (propertize message 'face 'font-lock-comment-face) "\n"
+                                   "from: "
+                                   (propertize key 'face 'font-lock-constant-face)
+                                   "\n\n"))))))
 
 (defun toxe--friend-getcreate-buffer (friend)
   "Return the buffer with the chat with the given FRIEND."
@@ -184,8 +219,8 @@ status of the connection:
             (let ((buf (get-buffer-create (format "*toxe-%s*"
                                                   (toxe--friend-name friend)))))
               (with-current-buffer buf
-                (toxe-chat-mode)
-                (setq toxe-chat-friend friend))
+                (let ((toxe-chat--pass-friend friend))
+                  (toxe-chat-mode)))
               buf)))))
 
 ;;;###autoload
@@ -267,6 +302,8 @@ matter.  BODY is the implementation."
   (toxe--update-root-buffer))
 
 (toxe--defhandler friend-request (public-key message)
+  (add-to-list 'toxe--pending-friend-requests (list public-key message))
+  (toxe--update-root-buffer)
   (message "toxe: friend-request from pk %s with message: %s"
            public-key
            message)
