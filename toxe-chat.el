@@ -44,10 +44,25 @@
 (defvar-local toxe-chat-ewoc nil
   "EWOC data for the current toxe chatbuf.")
 
-(defun toxe-chat--ewoc-pp (data)
-  "Pretty print DATA (for EWOC)."
-  (cl-destructuring-bind (from msg) data
-    (insert from ":\t" msg)))
+(defmacro toxe-with-accessors (spec type struct &rest body)
+  "Like CL' with-accessors.
+Destructure a STRUCT of the given TYPE using SPEC.  SPEC is in
+the form ((VAR-NAME ACCESSOR-NAME)).  BODY is then executed with
+the bindings set."
+  (declare (indent 3))
+  (let ((o (gensym)))
+    `(let ((,o ,struct))
+       (cl-symbol-macrolet
+           ,(cl-loop for (var acc) in spec
+                     collect `(,var (cl-struct-slot-value ,type ',acc ,o)))
+         ,@body))))
+
+(defun toxe-chat--ewoc-pp (msg)
+  "Pretty print MSG (for EWOC)."
+  (toxe-with-accessors ((from from)
+                        (text tex))
+      'toxe--message msg
+    (insert from ":\t" text)))
 
 (defvar toxe-chat-mode-map
   (let ((map (make-sparse-keymap)))
@@ -68,9 +83,11 @@
                      (format "Chat with %s\n\n"
                              (toxe--friend-name toxe-chat-friend)))))
 
-(defun toxe-chat--insert (from msg)
-  "Insert the message MSG from the user FROM."
-  (let ((datum `(,from ,msg)))
+(defun toxe-chat--insert (from type msg)
+  "Insert the message MSG with TYPE from the user FROM."
+  (let ((datum (make-toxe--message :from from
+                                   :type type
+                                   :text msg)))
     (setq toxe-chat-messages
           (vconcat toxe-chat-messages datum))
     (ewoc-enter-last toxe-chat-ewoc datum)
@@ -82,7 +99,7 @@
   "Prompt for a message and send it."
   (interactive)
   (when-let (msg (read-string "Message: "))
-    (toxe-chat--insert (or toxe-user-name "me") msg)
+    (toxe-chat--insert (or toxe-user-name "me") 'normal msg)
     (toxe--cmd-friend-send-message (toxe--friend-number toxe-chat-friend)
                                    'normal
                                    msg)))

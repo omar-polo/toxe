@@ -106,6 +106,9 @@ status of the connection:
   name status-message conn-status
   buffer)
 
+(cl-defstruct toxe--message
+  from type text)
+
 (defun toxe-connection-status ()
   "Return the status of the connection."
   toxe--connection-status)
@@ -196,7 +199,7 @@ ooooooooooooo
                  do (widget-insert "* ")
                  do (widget-create 'push-button
                                    :notify (lambda (&rest _ignore)
-                                             (message "deleting" key "from the list")
+                                             (message "deleting %s from the list" key)
                                              (setq toxe--pending-friend-requests
                                                    (cl-delete-if (lambda (r)
                                                                    (string= (car r) key))
@@ -312,7 +315,7 @@ matter.  BODY is the implementation."
 (toxe--defhandler friend-message (friend-number message-type message)
   (when-let (f (toxe--friend-by-number friend-number))
     (with-current-buffer (toxe--friend-getcreate-buffer f)
-      (toxe-chat--insert (toxe--friend-name f) message)))
+      (toxe-chat--insert (toxe--friend-name f) message-type message)))
   (run-hook-with-args toxe-friend-message-hook friend-number message-type message))
 
 (toxe--defhandler connection-status (connection-status)
@@ -335,6 +338,9 @@ matter.  BODY is the implementation."
 (toxe--defhandler friend-connection-status (friend-number connection-status)
   (when-let (f (toxe--friend-by-number friend-number))
     (setf (toxe--friend-conn-status f) connection-status)))
+
+(toxe--defhandler friend-read-receipt (friend-number message-id)
+  )
 
 (defun toxe--send-request (req)
   "Send REQ to the `toxe--process'."
